@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Roles estrictos (RBAC)
+enum Role {
+  ADMIN
+  MEDICO
+  RECEPCION
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  password       String   
+  name           String
+  role           Role            @default(RECEPCION)
+  isActive       Boolean         @default(true)
+  
+  medicalRecords MedicalRecord[] 
+  stockMovements StockMovement[] 
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@map("users")
+}
+
+model Patient {
+  id             String          @id @default(uuid())
+  documentId     String          @unique 
+  firstName      String
+  lastName       String
+  email          String?         
+  phone          String?
+  birthDate      DateTime
+  address        String?
+  
+  medicalRecords MedicalRecord[] 
+  invoices       Invoice[]       
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@map("patients")
+}
+
+model MedicalRecord {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  doctorId    String
+  doctor      User     @relation(fields: [doctorId], references: [id]) 
+  
+  notes       String   @db.Text 
+  attachments String[] 
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("medical_records")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  quantity    Int      @default(0) 
+  minStock    Int      @default(5) 
+  price       Float?   
+  
+  movements   StockMovement[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("products")
+}
+
+model StockMovement {
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id]) 
+  
+  type        MovementType
+  quantity    Int      
+  notes       String?
+  
+  createdAt   DateTime @default(now())
+
+  @@map("stock_movements")
+}
+
+enum MovementType {
+  IN   
+  OUT  
+}
+
+model Invoice {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  
+  totalAmount Float    
+  status      InvoiceStatus @default(PENDING)
+  
+  items       InvoiceItem[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  
+  description String   
+  quantity    Int      @default(1)
+  unitPrice   Float
+  subtotal    Float    
+  
+  createdAt   DateTime @default(now())
+
+  @@map("invoice_items")
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
