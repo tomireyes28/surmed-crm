@@ -2,7 +2,9 @@ import { Controller, Get, Post, Body, Query, UseGuards, Param } from '@nestjs/co
 import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Facturas')
 @UseGuards(JwtAuthGuard)
 @Controller('invoices')
 export class InvoicesController {

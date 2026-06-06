@@ -4,7 +4,10 @@ import { CreateProductDto } from './dto/create-inventory.dto';
 import { StockMovementDto } from './dto/stock-movement.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { RequestWithUser } from '../auth/interfaces/auth.interface';
+import { ApiTags } from '@nestjs/swagger';
 
+
+@ApiTags('Inventario')
 @UseGuards(JwtAuthGuard)
 @Controller('inventory')
 export class InventoryController {

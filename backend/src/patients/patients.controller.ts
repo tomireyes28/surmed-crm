@@ -3,7 +3,9 @@ import { PatientsService } from './patients.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Pacientes')
 @UseGuards(JwtAuthGuard) // <-- Protege todas las rutas de este controlador
 @Controller('patients')
 export class PatientsController {

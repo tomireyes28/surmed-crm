@@ -5,7 +5,11 @@ import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { RequestWithUser } from '../auth/interfaces/auth.interface';
 import 'multer';
+import { ApiTags } from '@nestjs/swagger';
 
+
+
+@ApiTags('Historias Clínicas')
 @UseGuards(JwtAuthGuard)
 @Controller('medical-records')
 export class MedicalRecordsController {
