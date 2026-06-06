@@ -7,6 +7,7 @@ import { patientsService } from '@/services/patients.service';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Save } from 'lucide-react';
+import { isAxiosError } from 'axios';
 
 export default function NewPatientPage() {
   const router = useRouter();
@@ -31,12 +32,14 @@ export default function NewPatientPage() {
   const onSubmit = async (data: PatientFormValues) => {
     try {
       await patientsService.create(data);
-      // Si sale bien, volvemos a la lista de pacientes
       router.push('/dashboard/patients');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error al crear paciente', error);
-      // Mostramos el mensaje de error que viene del backend (ej: documento duplicado)
-      alert(error.response?.data?.message || 'Error al guardar el paciente');
+      if (isAxiosError(error)) {
+        alert(error.response?.data?.message || 'Error al guardar el paciente');
+      } else {
+        alert('Error inesperado al guardar el paciente');
+      }
     }
   };
 
