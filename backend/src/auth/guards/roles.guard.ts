@@ -3,14 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { Role } from '@prisma/client';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
-// 1. Creamos la interfaz exacta de lo que esperamos que traiga el request
-interface RequestWithUser {
-  user?: {
-    id: string;
-    email: string;
-    role: Role;
-  };
-}
+import { RequestWithUser } from '../interfaces/auth.interface';
 
 @Injectable()
 export class RolesGuard implements CanActivate {

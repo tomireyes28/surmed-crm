@@ -42,4 +42,29 @@ export class AuthService {
       backendToken: await this.jwtService.signAsync(payload),
     };
   }
+
+  // BORRAR ESTO DESPUÉS DE USARLO
+  async seedAdmin() {
+    // Verificamos si ya existe para no duplicarlo
+    const exists = await this.prisma.user.findUnique({
+      where: { email: 'admin@surmed.com' },
+    });
+
+    if (exists) {
+      return { message: 'El administrador ya existe' };
+    }
+
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+
+    const admin = await this.prisma.user.create({
+      data: {
+        email: 'admin@surmed.com',
+        password: hashedPassword,
+        name: 'Administrador Surmed',
+        role: 'ADMIN',
+      },
+    });
+
+    return { message: 'Administrador creado con éxito', user: admin };
+  }
 }
