@@ -7,6 +7,8 @@ import { AuthModule } from './auth/auth.module';
 import { PatientsModule } from './patients/patients.module';
 import { StorageModule } from './storage/storage.module';
 import { MedicalRecordsModule } from './medical-records/medical-records.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { InvoicesModule } from './invoices/invoices.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { MedicalRecordsModule } from './medical-records/medical-records.module';
     PatientsModule,
     StorageModule,
     MedicalRecordsModule,
+    InventoryModule,
+    InvoicesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
