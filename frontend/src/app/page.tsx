@@ -6,6 +6,7 @@ import { loginSchema, LoginFormValues } from '../schemas/auth.schema';
 import { useAuthStore } from '../store/authStore';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
+import Cookies from 'js-cookie';
 
 export default function LoginPage() {
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -21,16 +22,16 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     try {
-      // Le pegamos al endpoint que armamos en el backend
       const response = await axios.post('http://localhost:3000/auth/login', data);
-      
       const { backendToken, user } = response.data;
       
-      // Guardamos el token en nuestro store de Zustand
+      // 1. Guardamos en Zustand para la UI rápida
       setAuth(backendToken, user);
       
-      // Redirigimos al dashboard (que haremos en la Semana 3)
-      alert(`¡Bienvenido ${user.name}!`);
+      // 2. Guardamos en Cookies para el Middleware de Next.js (expira en 1 día)
+      Cookies.set('token', backendToken, { expires: 1 });
+      
+      // 3. Redirigimos
       router.push('/dashboard');
       
     } catch (error) {
