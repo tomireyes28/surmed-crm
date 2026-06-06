@@ -5,8 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, LoginFormValues } from '../schemas/auth.schema';
 import { useAuthStore } from '../store/authStore';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
 import Cookies from 'js-cookie';
+import {api} from '@/services/api';
 
 export default function LoginPage() {
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -22,7 +22,7 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     try {
-      const response = await axios.post('http://localhost:3000/auth/login', data);
+      const response = await api.post('/auth/login', data);
       const { backendToken, user } = response.data;
       
       // 1. Guardamos en Zustand para la UI rápida
