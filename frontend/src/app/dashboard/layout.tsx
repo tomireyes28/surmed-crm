@@ -4,15 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Cookies from 'js-cookie';
-import { 
-  Users, 
-  Package, 
-  FileText, 
-  LogOut, 
-  Activity,
-  Menu
-} from 'lucide-react';
-import { useState } from 'react';
+import { Users, Package, FileText, LogOut, Activity, Menu } from 'lucide-react';
+import { useState, useEffect } from 'react'; // <-- Importar useEffect
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,6 +13,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const user = useAuthStore((state) => state.user);
   const logoutStore = useAuthStore((state) => state.logout);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
+  
+ 
+  const [isMounted, setIsMounted] = useState(false);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsMounted(true);
+    }, 0);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  // ---------------------
 
   const handleLogout = () => {
     Cookies.remove('token');
@@ -28,11 +33,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const menuItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: Activity },
-    { name: 'Pacientes', href: '/dashboard/patients', icon: Users },
-    { name: 'Inventario', href: '/dashboard/inventory', icon: Package },
-    { name: 'Facturación', href: '/dashboard/invoices', icon: FileText },
+    { name: 'Dashboard', href: '/dashboard', icon: Activity, allowedRoles: ['ADMIN', 'MEDICO'] },
+    { name: 'Pacientes', href: '/dashboard/patients', icon: Users, allowedRoles: ['ADMIN', 'MEDICO'] },
+    { name: 'Inventario', href: '/dashboard/inventory', icon: Package, allowedRoles: ['ADMIN'] },
+    { name: 'Facturación', href: '/dashboard/invoices', icon: FileText, allowedRoles: ['ADMIN'] },
   ];
+
+  // Filtramos los ítems
+  const visibleMenuItems = menuItems.filter(item => 
+    user && item.allowedRoles.includes(user.role)
+  );
+
+  // Si no está montado, devolvemos un cascarón vacío para evitar errores de Next.js
+  if (!isMounted) return null;
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -48,7 +61,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="flex-1 py-6 flex flex-col gap-2 px-3">
-          {menuItems.map((item) => {
+          {/* 3. Mapeamos solo los ítems visibles */}
+          {visibleMenuItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
             return (
