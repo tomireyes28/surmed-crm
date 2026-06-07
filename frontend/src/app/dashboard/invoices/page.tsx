@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { invoicesService } from '@/services/invoices.service';
 import { Invoice } from '@/schemas/invoice.schema';
-import { Search, Plus, Receipt } from 'lucide-react';
+import { Search, Plus, Receipt, Download } from 'lucide-react';
 import Link from 'next/link';
+import { generateInvoicePDF } from '@/utils/pdfGenerator';
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -26,7 +27,6 @@ export default function InvoicesPage() {
     fetchInvoices();
   }, []);
 
-  // Filtramos por nombre, apellido o documento del paciente
   const filteredInvoices = invoices.filter((inv) => {
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -38,7 +38,6 @@ export default function InvoicesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header y Buscador */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold text-slate-800">Facturación</h1>
         
@@ -64,7 +63,6 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {/* Tabla de Facturas */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -74,18 +72,19 @@ export default function InvoicesPage() {
                 <th className="px-6 py-4 font-medium">Fecha</th>
                 <th className="px-6 py-4 font-medium">Paciente</th>
                 <th className="px-6 py-4 font-medium text-right">Total</th>
+                <th className="px-6 py-4 font-medium text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
                     Cargando facturas...
                   </td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
                     No se encontraron facturas emitidas.
                   </td>
                 </tr>
@@ -94,7 +93,6 @@ export default function InvoicesPage() {
                   <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium text-slate-700 flex items-center gap-2">
                       <Receipt size={16} className="text-slate-400" />
-                      {/* Mostramos solo los primeros caracteres del ID para que parezca un código de factura */}
                       FAC-{invoice.id.split('-')[0].toUpperCase()}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500">
@@ -107,6 +105,15 @@ export default function InvoicesPage() {
                       <span className="text-emerald-600 font-bold">
                         ${invoice.totalAmount.toLocaleString('es-AR')}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => generateInvoicePDF(invoice)}
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-flex justify-center items-center"
+                        title="Descargar Factura en PDF"
+                      >
+                        <Download size={20} />
+                      </button>
                     </td>
                   </tr>
                 ))

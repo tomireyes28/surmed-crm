@@ -26,4 +26,10 @@ export interface Invoice {
     lastName: string;
     documentId: string;
   };
+  items: {
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    subtotal: number;
+  }[];
 }

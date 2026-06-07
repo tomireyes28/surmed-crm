@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { invoiceSchema, InvoiceFormValues } from '@/schemas/invoice.schema';
 import { invoicesService } from '@/services/invoices.service';
@@ -22,7 +22,6 @@ export default function NewInvoicePage() {
     register,
     control,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceSchema),
@@ -38,8 +37,11 @@ export default function NewInvoicePage() {
     name: 'items',
   });
 
-  // 3. Observamos los ítems en vivo para calcular el total absoluto
-  const watchItems = watch('items');
+  const watchItems = useWatch({
+    control,
+    name: 'items',
+  }) || [];
+
   const totalAmount = watchItems.reduce((acc, item) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unitPrice) || 0;
