@@ -1,17 +1,21 @@
 import { api } from './api';
 
 export const medicalRecordsService = {
-  // Trae todas las evoluciones de un paciente específico
   getByPatientId: async (patientId: string) => {
     const { data } = await api.get(`/medical-records/patient/${patientId}`);
     return data;
   },
 
-  // Crea una nueva nota (preparado con FormData para cuando le sumemos archivos en el Día 5)
-  create: async (patientId: string, notes: string) => {
+  // Agregamos el parámetro "file" opcional
+  create: async (patientId: string, notes: string, file?: File | null) => {
     const formData = new FormData();
     formData.append('patientId', patientId);
     formData.append('notes', notes);
+    
+    // Si el médico seleccionó un archivo, lo metemos en el paquete
+    if (file) {
+      formData.append('file', file);
+    }
     
     const { data } = await api.post('/medical-records', formData, {
       headers: {

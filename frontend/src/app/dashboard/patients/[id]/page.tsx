@@ -1,17 +1,18 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation'; // Borramos el useRouter porque no lo usábamos
+import { useParams } from 'next/navigation';
 import { patientsService } from '@/services/patients.service';
 import { medicalRecordsService } from '@/services/medicalRecords.service';
 import { Patient } from '@/schemas/patient.schema';
 import Link from 'next/link';
-import { ArrowLeft, Stethoscope, Clock, Send } from 'lucide-react';
+import { ArrowLeft, Stethoscope, Clock, Send, Paperclip, FileText as FileIcon } from 'lucide-react';
 
-// 1. Creamos la interfaz para matar el "any"
+// Actualizamos la interfaz para incluir el array de archivos (attachments)
 interface MedicalRecord {
   id: string;
   notes: string;
+  attachments: string[]; // URLs firmadas de Supabase
   createdAt: string;
   doctor: {
     name: string;
@@ -24,12 +25,12 @@ export default function PatientDetailPage() {
   const patientId = params.id as string;
   
   const [patient, setPatient] = useState<Patient | null>(null);
-  // 2. Le pasamos la interfaz al estado
   const [records, setRecords] = useState<MedicalRecord[]>([]);
+  
   const [newNote, setNewNote] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null); // Estado para el PDF/Imagen
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 3. Envolvemos la función en useCallback para que React no se queje en el useEffect
   const loadData = useCallback(async () => {
     try {
       const patientData = await patientsService.getById(patientId);
@@ -42,9 +43,11 @@ export default function PatientDetailPage() {
     }
   }, [patientId]);
 
-  // 4. Ahora sí, el useEffect tiene su dependencia correcta
   useEffect(() => {
-    loadData();
+    const fetchInitialData = async () => {
+      await loadData();
+    };
+    fetchInitialData();
   }, [loadData]);
 
   const handleAddNote = async (e: React.FormEvent) => {
@@ -53,8 +56,17 @@ export default function PatientDetailPage() {
 
     setIsSubmitting(true);
     try {
-      await medicalRecordsService.create(patientId, newNote);
+      // Le pasamos el texto y el archivo al servicio
+      await medicalRecordsService.create(patientId, newNote, selectedFile);
+      
+      // Limpiamos todo
       setNewNote('');
+      setSelectedFile(null); 
+      
+      // Reseteamos el input file a mano para que se borre el nombre de la UI
+      const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
       await loadData();
     } catch (error) {
       console.error('Error al guardar la nota', error);
@@ -103,6 +115,27 @@ export default function PatientDetailPage() {
                 placeholder="Escriba los síntomas, diagnóstico o tratamiento indicado..."
                 required
               />
+              
+              {/* Input File para adjuntar estudios */}
+              <div className="relative">
+                <input
+                  type="file"
+                  id="file-upload"
+                  onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)}
+                  className="hidden"
+                  accept=".pdf,image/*"
+                />
+                <label 
+                  htmlFor="file-upload"
+                  className="flex items-center gap-2 px-4 py-2 border border-dashed border-slate-300 rounded-lg text-sm text-slate-600 hover:bg-slate-50 cursor-pointer transition-colors"
+                >
+                  <Paperclip size={16} className="text-slate-400" />
+                  <span className="truncate">
+                    {selectedFile ? selectedFile.name : 'Adjuntar PDF o Imagen'}
+                  </span>
+                </label>
+              </div>
+
               <button
                 type="submit"
                 disabled={isSubmitting || !newNote.trim()}
@@ -140,7 +173,25 @@ export default function PatientDetailPage() {
                         })}
                       </span>
                     </div>
-                    <p className="text-slate-600 text-sm whitespace-pre-wrap">{record.notes}</p>
+                    <p className="text-slate-600 text-sm whitespace-pre-wrap mb-3">{record.notes}</p>
+                    
+                    {/* Si la nota tiene archivos adjuntos, los mostramos como botones clickeables */}
+                    {record.attachments && record.attachments.length > 0 && (
+                      <div className="flex gap-2">
+                        {record.attachments.map((url, index) => (
+                          <a 
+                            key={index}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md text-xs font-medium hover:bg-blue-100 transition-colors"
+                          >
+                            <FileIcon size={14} />
+                            Ver Estudio Adjunto
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
