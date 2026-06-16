@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Cookies from 'js-cookie';
 import { Users, Package, FileText, LogOut, Activity, Menu } from 'lucide-react';
-import { useState, useEffect } from 'react'; // <-- Importar useEffect
+import { useState, useEffect } from 'react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -14,7 +14,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const logoutStore = useAuthStore((state) => state.logout);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   
- 
   const [isMounted, setIsMounted] = useState(false);
   
   useEffect(() => {
@@ -24,7 +23,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     
     return () => clearTimeout(timer);
   }, []);
-  // ---------------------
 
   const handleLogout = () => {
     Cookies.remove('token');
@@ -51,17 +49,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
       <aside className={`bg-slate-900 text-white transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col`}>
-        <div className="h-16 flex items-center justify-center border-b border-slate-800">
-          <h2 className={`font-bold text-xl text-blue-400 transition-all ${!isSidebarOpen && 'hidden'}`}>
-            Surmed CRM
-          </h2>
-          <h2 className={`font-bold text-xl text-blue-400 transition-all ${isSidebarOpen && 'hidden'}`}>
+        {/* ACÁ ESTÁ EL CAMBIO DEL LOGO */}
+        <div className="h-20 flex items-center justify-center border-b border-slate-800 py-3">
+          {/* Logo cuando el menú está abierto */}
+          <img 
+            src="/logo.png" 
+            alt="Surmed Logo" 
+            className={`h-full object-contain transition-all ${!isSidebarOpen && 'hidden'}`}
+          />
+          {/* Icono colapsado cuando el menú está cerrado (Letra S verde) */}
+          <h2 className={`font-bold text-xl text-emerald-500 transition-all ${isSidebarOpen && 'hidden'}`}>
             S
           </h2>
         </div>
 
         <nav className="flex-1 py-6 flex flex-col gap-2 px-3">
-          {/* 3. Mapeamos solo los ítems visibles */}
           {visibleMenuItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
