@@ -13,6 +13,9 @@ interface Props {
 export function NewProductModal({ isOpen, onClose, onSuccess }: Props) {
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
+    defaultValues: {
+      category: 'INSUMO_MEDICO' // Valor por defecto
+    }
   });
 
   if (!isOpen) return null;
@@ -40,35 +43,45 @@ export function NewProductModal({ isOpen, onClose, onSuccess }: Props) {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-         <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Stock Mín. *</label>
-              
-              <input type="number" {...register('minStock', { valueAsNumber: true })} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-              {errors.minStock && <span className="text-red-500 text-xs mt-1">{errors.minStock.message}</span>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Precio Ref. ($)</label>
-              
-              <input type="number" {...register('price', { valueAsNumber: true })} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
+          
+          {/* Nombre */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre *</label>
+            <input type="text" {...register('name')} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+            {errors.name && <span className="text-red-500 text-xs mt-1">{errors.name.message}</span>}
+          </div>
 
+          {/* Categoría */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Categoría *</label>
+            <select {...register('category')} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="INSUMO_MEDICO">Insumo Médico / Descartable</option>
+              <option value="OFICINA">Limpieza y Oficina</option>
+              <option value="ACTIVO_FIJO">Mobiliario y Equipamiento</option>
+            </select>
+            {errors.category && <span className="text-red-500 text-xs mt-1">{errors.category.message}</span>}
+          </div>
+
+          {/* Descripción */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
             <input type="text" {...register('description')} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
+          {/* Min Stock & Precio en Grid */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Stock Mín. *</label>
-              <input type="number" {...register('minStock')} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" {...register('minStock', { valueAsNumber: true })} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
               {errors.minStock && <span className="text-red-500 text-xs mt-1">{errors.minStock.message}</span>}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Precio Ref. ($)</label>
-              <input type="number" {...register('price')} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" {...register('price', { valueAsNumber: true })} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
 
+          {/* Botonera */}
           <div className="pt-4 flex justify-end gap-3">
             <button type="button" onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded-lg font-medium transition-colors">
               Cancelar

@@ -3,10 +3,10 @@ import * as z from 'zod';
 export const productSchema = z.object({
   name: z.string().min(2, { message: 'El nombre es obligatorio' }),
   description: z.string().optional(),
-  // Usamos .number() limpio en vez de coerce
   minStock: z.number().min(0, { message: 'El stock mínimo no puede ser negativo' }),
-  // Permitimos que sea un número opcional, o que se ignore si está vacío (NaN)
   price: z.number().min(0, { message: 'El precio no puede ser negativo' }).optional().or(z.nan().transform(() => undefined)),
+  // Agregamos la validación de la categoría
+  category: z.enum(['INSUMO_MEDICO', 'OFICINA', 'ACTIVO_FIJO']),
 });
 
 export const movementSchema = z.object({
@@ -27,4 +27,5 @@ export interface Product {
   minStock: number;
   price: number | null;
   isLowStock: boolean;
+  category: 'INSUMO_MEDICO' | 'OFICINA' | 'ACTIVO_FIJO';
 }

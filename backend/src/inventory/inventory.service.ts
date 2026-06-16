@@ -20,10 +20,10 @@ export class InventoryService {
       orderBy: { name: 'asc' },
     });
 
-    // Mapeamos para agregar un flag de "alerta" si el stock es bajo
     return products.map(product => ({
       ...product,
-      isLowStock: product.quantity <= product.minStock,
+      // Solo aplicamos la alerta roja si es Insumo Médico Y el stock es bajo
+      isLowStock: product.category === 'INSUMO_MEDICO' && product.quantity <= product.minStock,
     }));
   }
 

@@ -66,6 +66,12 @@ model MedicalRecord {
   @@map("medical_records")
 }
 
+enum ProductCategory {
+  INSUMO_MEDICO
+  OFICINA
+  ACTIVO_FIJO
+}
+
 model Product {
   id          String   @id @default(uuid())
   name        String
@@ -73,6 +79,8 @@ model Product {
   quantity    Int      @default(0) 
   minStock    Int      @default(5) 
   price       Float?   
+  
+  category    ProductCategory @default(INSUMO_MEDICO)
   
   movements   StockMovement[]
 

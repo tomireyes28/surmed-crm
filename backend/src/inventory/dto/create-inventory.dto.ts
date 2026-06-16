@@ -1,4 +1,11 @@
-import { IsString, IsInt, IsOptional, IsNumber, Min } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsNumber, Min, IsEnum } from 'class-validator';
+
+// Espejamos el enum de Prisma
+export enum ProductCategory {
+  INSUMO_MEDICO = 'INSUMO_MEDICO',
+  OFICINA = 'OFICINA',
+  ACTIVO_FIJO = 'ACTIVO_FIJO'
+}
 
 export class CreateProductDto {
   @IsString()
@@ -9,10 +16,16 @@ export class CreateProductDto {
   description?: string;
 
   @IsInt()
-  @Min(0, { message: 'El stock mínimo no puede ser negativo' })
+  @Min(0)
   minStock!: number;
 
   @IsNumber()
+  @Min(0)
   @IsOptional()
   price?: number;
+
+  // Nuevo campo
+  @IsEnum(ProductCategory)
+  @IsOptional()
+  category?: ProductCategory;
 }
