@@ -8,7 +8,7 @@ export const createAppointmentSchema = z.object({
   doctorId: z.string().min(1, 'El médico es obligatorio'),
   specialtyId: z.string().min(1, 'La especialidad es obligatoria'),
   date: z.string().min(1, 'La fecha y hora son obligatorias'),
-  duration: z.number().min(15).default(30),
+  duration: z.number().min(15),
   notes: z.string().optional(),
 });
 
