@@ -9,6 +9,8 @@ import { StorageModule } from './storage/storage.module';
 import { MedicalRecordsModule } from './medical-records/medical-records.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { SpecialtiesModule } from './specialties/specialties.module';
+import { AppointmentsModule } from './appointments/appointments.module';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { InvoicesModule } from './invoices/invoices.module';
     MedicalRecordsModule,
     InventoryModule,
     InvoicesModule,
+    SpecialtiesModule,
+    AppointmentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

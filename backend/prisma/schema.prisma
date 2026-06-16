@@ -24,6 +24,9 @@ model User {
   medicalRecords MedicalRecord[] 
   stockMovements StockMovement[] 
 
+  appointments   Appointment[]   @relation("DoctorAppointments")
+  specialties    Specialty[]     @relation("DoctorSpecialties")
+
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -42,6 +45,7 @@ model Patient {
   
   medicalRecords MedicalRecord[] 
   invoices       Invoice[]       
+  appointments   Appointment[]
 
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -147,4 +151,52 @@ enum InvoiceStatus {
   PENDING
   PAID
   CANCELLED
+}
+
+// ==========================================
+// MÓDULO DE AGENDA Y TURNOS
+// ==========================================
+
+model Specialty {
+  id          String        @id @default(uuid())
+  name        String        @unique
+  description String?
+  
+  // Relación Muchos-a-Muchos: Un médico tiene varias especialidades y viceversa
+  doctors     User[]        @relation("DoctorSpecialties")
+  
+  appointments Appointment[]
+
+  @@map("specialties")
+}
+
+enum AppointmentStatus {
+  PENDING           // Pendiente de confirmación
+  CONFIRMED         // Confirmado por el paciente
+  IN_WAITING_ROOM   // En sala de espera
+  ATTENDED          // Ya fue atendido (Acá engancharemos la factura luego)
+  CANCELLED         // Cancelado
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  
+  patientId   String
+  patient     Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  doctorId    String
+  doctor      User              @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  
+  specialtyId String
+  specialty   Specialty         @relation(fields: [specialtyId], references: [id])
+  
+  date        DateTime          // Fecha y hora exacta del turno
+  duration    Int               @default(30) // Duración estimada en minutos
+  status      AppointmentStatus @default(PENDING)
+  notes       String?           @db.Text
+  
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@map("appointments")
 }
