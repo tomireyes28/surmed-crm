@@ -11,6 +11,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { SpecialtiesModule } from './specialties/specialties.module';
 import { AppointmentsModule } from './appointments/appointments.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
     InvoicesModule,
     SpecialtiesModule,
     AppointmentsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

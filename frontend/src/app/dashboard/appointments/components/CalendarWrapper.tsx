@@ -6,6 +6,12 @@ import { Appointment } from '../../../../schemas/appointment.schema';
 
 const locales = { 'es': es };
 
+interface CustomEventProps {
+  event: {
+    title: string;
+  };
+}
+
 const localizer = dateFnsLocalizer({
   format,
   parse,
@@ -15,7 +21,7 @@ const localizer = dateFnsLocalizer({
 });
 
 // 1. CREAMOS EL COMPONENTE PERSONALIZADO PARA EL BLOQUE DEL TURNO
-const CustomEvent = ({ event }: any) => {
+const CustomEvent = ({ event }: CustomEventProps) => {
   // Separamos el título (Paciente - Especialidad)
   const [patient, specialty] = event.title.split(' - ');
   
