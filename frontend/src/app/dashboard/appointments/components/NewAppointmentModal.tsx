@@ -3,7 +3,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X, Save, Loader2 } from 'lucide-react';
 
-// Importamos de forma segura con rutas relativas
 import { createAppointmentSchema, CreateAppointmentFormValues } from '../../../../schemas/appointment.schema';
 import { appointmentService } from '../../../../services/appointment.service';
 import { patientsService } from '../../../../services/patients.service';
@@ -15,20 +14,30 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  preselectedPatientId?: string; // <-- Acá recibimos el ID mágico
 }
 
-export function NewAppointmentModal({ isOpen, onClose, onSuccess }: Props) {
+export function NewAppointmentModal({ isOpen, onClose, onSuccess, preselectedPatientId }: Props) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [doctors, setDoctors] = useState<UserDoctor[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<CreateAppointmentFormValues>({
+  // Agregamos setValue a la desestructuración de useForm
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, setValue } = useForm<CreateAppointmentFormValues>({
     resolver: zodResolver(createAppointmentSchema),
     defaultValues: {
       duration: 30, // 30 minutos por defecto
+      patientId: preselectedPatientId || '', // Si viene el ID, lo clavamos por defecto
     }
   });
+
+  // Este hook escucha si el ID cambia y fuerza al formulario a actualizarse
+  useEffect(() => {
+    if (preselectedPatientId) {
+      setValue('patientId', preselectedPatientId);
+    }
+  }, [preselectedPatientId, setValue]);
 
   // Cargar datos de los selects cuando se abre el modal
   useEffect(() => {
@@ -128,7 +137,6 @@ export function NewAppointmentModal({ isOpen, onClose, onSuccess }: Props) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Fecha y Hora *</label>
-                {/* Input nativo de HTML para fecha y hora (perfecto para enviar ISO strings) */}
                 <input type="datetime-local" {...register('date')} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" />
                 {errors.date && <span className="text-red-500 text-xs mt-1">{errors.date.message}</span>}
               </div>

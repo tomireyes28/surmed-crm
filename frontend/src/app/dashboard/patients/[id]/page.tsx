@@ -6,7 +6,9 @@ import { patientsService } from '@/services/patients.service';
 import { medicalRecordsService } from '@/services/medicalRecords.service';
 import { Patient } from '@/schemas/patient.schema';
 import Link from 'next/link';
-import { ArrowLeft, Stethoscope, Clock, Send, Paperclip, FileText as FileIcon } from 'lucide-react';
+import { ArrowLeft, Stethoscope, Clock, Send, Paperclip, FileText as FileIcon, CalendarPlus } from 'lucide-react';
+import { NewAppointmentModal } from '../../appointments/components/NewAppointmentModal';
+
 
 // Actualizamos la interfaz para incluir el array de archivos (attachments)
 interface MedicalRecord {
@@ -30,6 +32,9 @@ export default function PatientDetailPage() {
   const [newNote, setNewNote] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null); // Estado para el PDF/Imagen
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Estado para controlar el modal de turnos
+  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -95,6 +100,15 @@ export default function PatientDetailPage() {
             </p>
           </div>
         </div>
+        
+        {/* Botón de Nuevo Turno */}
+        <button 
+          onClick={() => setIsAppointmentModalOpen(true)}
+          className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
+        >
+          <CalendarPlus size={20} />
+          <span className="hidden sm:inline">Nuevo Turno</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -200,6 +214,14 @@ export default function PatientDetailPage() {
         </div>
         
       </div>
+
+      {/* Modal de Agendar Turno Oculto al final */}
+      <NewAppointmentModal 
+        isOpen={isAppointmentModalOpen}
+        onClose={() => setIsAppointmentModalOpen(false)}
+        onSuccess={() => setIsAppointmentModalOpen(false)}
+        preselectedPatientId={patient.id} // ¡Acá le mandamos el ID para que lo autoseleccione!
+      />
     </div>
   );
 }
