@@ -182,6 +182,77 @@ async function main() {
     console.log(`✅ ${file.filename}: ${count} productos importados.`);
   }
 
+  // --- 4. HISTORIAS CLÍNICAS (Test Data) ---
+  console.log('📝 Sembrando historias clínicas de prueba...');
+  await prisma.medicalRecord.create({
+    data: {
+      patientId: paciente1.id,
+      doctorId: drMartinez.id,
+      notes: 'Paciente acude a control anual. Refiere sentirse bien, sin dolores en el pecho ni fatiga. Se indica continuar con dieta baja en sodio y ejercicio moderado 3 veces por semana.',
+    },
+  });
+
+  await prisma.medicalRecord.create({
+    data: {
+      patientId: paciente2.id,
+      doctorId: draGomez.id,
+      notes: 'Paciente presenta cuadro febril de 48hs de evolución acompañado de odinofagia. Al examen físico: amígdalas eritematosas. Se indica tratamiento con Amoxicilina 500mg cada 8hs por 7 días.',
+    },
+  });
+  console.log('✅ Historias clínicas creadas');
+
+  // --- 5. FACTURACIÓN (Test Data) ---
+  console.log('💰 Sembrando facturación de prueba...');
+  
+  // Factura 1: Consulta básica (Pagada)
+  const invoice1 = await prisma.invoice.create({
+    data: {
+      patientId: paciente1.id,
+      totalAmount: 15000,
+      status: 'PAID',
+    },
+  });
+
+  await prisma.invoiceItem.create({
+    data: {
+      invoiceId: invoice1.id,
+      description: 'Consulta Médica - Dr. Martínez',
+      quantity: 1,
+      unitPrice: 15000,
+      subtotal: 15000,
+    },
+  });
+
+  // Factura 2: Consulta + Prácticas (Pendiente)
+  const invoice2 = await prisma.invoice.create({
+    data: {
+      patientId: paciente2.id,
+      totalAmount: 45000,
+      status: 'PENDING',
+    },
+  });
+
+  await prisma.invoiceItem.create({
+    data: {
+      invoiceId: invoice2.id,
+      description: 'Consulta Médica - Dra. Gómez',
+      quantity: 1,
+      unitPrice: 15000,
+      subtotal: 15000,
+    },
+  });
+
+  await prisma.invoiceItem.create({
+    data: {
+      invoiceId: invoice2.id,
+      description: 'Electrocardiograma de reposo',
+      quantity: 1,
+      unitPrice: 30000,
+      subtotal: 30000,
+    },
+  });
+  console.log('✅ Facturas de prueba creadas');
+
   console.log('🎉 Sembrado finalizado con éxito!');
 }
 

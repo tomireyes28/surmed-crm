@@ -4,9 +4,7 @@ import { es } from 'date-fns/locale/es';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { Appointment } from '../../../../schemas/appointment.schema';
 
-const locales = {
-  'es': es,
-};
+const locales = { 'es': es };
 
 const localizer = dateFnsLocalizer({
   format,
@@ -15,6 +13,19 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales,
 });
+
+// 1. CREAMOS EL COMPONENTE PERSONALIZADO PARA EL BLOQUE DEL TURNO
+const CustomEvent = ({ event }: any) => {
+  // Separamos el título (Paciente - Especialidad)
+  const [patient, specialty] = event.title.split(' - ');
+  
+  return (
+    <div className="flex flex-col justify-start h-full overflow-hidden p-0.5">
+      <span className="font-semibold text-xs leading-tight truncate drop-shadow-sm">{patient}</span>
+      <span className="text-[10px] leading-tight truncate opacity-90">{specialty}</span>
+    </div>
+  );
+};
 
 interface CalendarWrapperProps {
   appointments: Appointment[];
@@ -33,24 +44,21 @@ export function CalendarWrapper({ appointments, view, onViewChange, date, onDate
     resource: app,
   }));
 
-  // EL FIX: Reemplazamos 'any' por la estructura exacta que le pasamos en 'events'
   const eventStyleGetter = (event: { resource: Appointment }) => {
     const status = event.resource.status;
-    let backgroundColor = '#3b82f6'; 
+    let backgroundColor = '#3b82f6'; // PENDING -> blue-500
     
-    if (status === 'CONFIRMED') backgroundColor = '#10b981'; 
-    if (status === 'IN_WAITING_ROOM') backgroundColor = '#f59e0b'; 
-    if (status === 'CANCELLED') backgroundColor = '#ef4444'; 
+    if (status === 'CONFIRMED') backgroundColor = '#10b981'; // CONFIRMED -> emerald-500
+    if (status === 'IN_WAITING_ROOM') backgroundColor = '#f59e0b'; // amber-500
+    if (status === 'CANCELLED') backgroundColor = '#ef4444'; // red-500
 
     return {
       style: {
         backgroundColor,
         borderRadius: '6px',
-        color: 'white',
-        border: 'none',
+        color: '#ffffff',
+        border: '1px solid rgba(255,255,255,0.2)', // Borde sutil para darle profundidad
         display: 'block',
-        fontSize: '0.875rem',
-        padding: '2px 4px'
       }
     };
   };
@@ -63,6 +71,10 @@ export function CalendarWrapper({ appointments, view, onViewChange, date, onDate
       endAccessor="end"
       style={{ height: '100%' }}
       culture="es"
+      // 2. LE INYECTAMOS NUESTRO DISEÑO A LA LIBRERÍA
+      components={{
+        event: CustomEvent
+      }}
       messages={{
         next: "Siguiente",
         previous: "Anterior",
@@ -78,7 +90,6 @@ export function CalendarWrapper({ appointments, view, onViewChange, date, onDate
       date={date}
       onNavigate={onDateChange}
       eventPropGetter={eventStyleGetter}
-      onSelectEvent={(event) => console.log('Turno seleccionado:', event.resource)}
       step={15}
       timeslots={2}
       min={new Date(0, 0, 0, 8, 0, 0)} 

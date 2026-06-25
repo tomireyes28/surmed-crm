@@ -58,6 +58,15 @@ export default function AppointmentsPage() {
         </button>
       </div>
 
+      {/* --- AGREGAR ESTO: LEYENDA DE ESTADOS --- */}
+      <div className="flex items-center gap-4 px-2 text-sm text-slate-600">
+        <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Pendiente</span>
+        <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-500"></div> Confirmado</span>
+        <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-500"></div> En Espera</span>
+        <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-500"></div> Cancelado</span>
+      </div>
+      {/* -------------------------------------- */}
+
       <div className="flex-1 bg-white p-4 rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         {isLoading ? (
           <div className="h-full flex items-center justify-center text-slate-500">
