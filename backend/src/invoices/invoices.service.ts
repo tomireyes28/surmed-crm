@@ -49,7 +49,7 @@ export class InvoicesService {
       where: patientId ? { patientId } : undefined,
       orderBy: { createdAt: 'desc' },
       include: {
-        patient: { select: { firstName: true, lastName: true } },
+        patient: { select: { id: true, firstName: true, lastName: true, documentId: true } },
         items: true,
       },
     });
@@ -59,7 +59,7 @@ export class InvoicesService {
     return this.prisma.invoice.findUnique({
       where: { id },
       include: {
-        patient: true,
+        patient: { select: { id: true, firstName: true, lastName: true, documentId: true } },
         items: true,
       },
     });
