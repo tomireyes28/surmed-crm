@@ -8,7 +8,6 @@ export class PatientsService {
   constructor(private prisma: PrismaService) {}
 
   async create(createPatientDto: CreatePatientDto) {
-    // 1. Verificar si ya existe un paciente con ese documento
     const existingPatient = await this.prisma.patient.findUnique({
       where: { documentId: createPatientDto.documentId },
     });
@@ -17,18 +16,17 @@ export class PatientsService {
       throw new ConflictException('Ya existe un paciente registrado con este documento');
     }
 
-    // 2. Guardar en la base de datos
     return this.prisma.patient.create({
       data: {
         ...createPatientDto,
-        birthDate: new Date(createPatientDto.birthDate), // Convertimos el string a formato Date para Prisma
+        birthDate: new Date(createPatientDto.birthDate), 
       },
     });
   }
 
   async findAll() {
     return this.prisma.patient.findMany({
-      orderBy: { lastName: 'asc' }, // Los devolvemos ordenados por apellido
+      orderBy: { lastName: 'asc' }, 
     });
   }
 
@@ -36,7 +34,17 @@ export class PatientsService {
     return this.prisma.patient.findUnique({
       where: { id },
       include: {
-        medicalRecords: true, // Cuando busquemos un paciente en detalle, traemos su historial
+        medicalRecords: {
+          orderBy: { createdAt: 'desc' } // Ya que estamos, ordenamos las notas de más nuevas a más viejas
+        },
+        // --- NUEVO: Traemos los turnos del paciente ---
+        appointments: {
+          orderBy: { date: 'asc' }, // Orden cronológico
+          include: {
+            doctor: { select: { name: true } },
+            specialty: { select: { name: true } },
+          }
+        }
       },
     });
   }

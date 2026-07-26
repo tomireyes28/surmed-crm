@@ -6,15 +6,13 @@ import { patientsService } from '@/services/patients.service';
 import { medicalRecordsService } from '@/services/medicalRecords.service';
 import { Patient } from '@/schemas/patient.schema';
 import Link from 'next/link';
-import { ArrowLeft, Stethoscope, Clock, Send, Paperclip, FileText as FileIcon, CalendarPlus } from 'lucide-react';
+import { ArrowLeft, Stethoscope, Clock, Send, Paperclip, FileText as FileIcon, CalendarPlus, CalendarDays, History } from 'lucide-react';
 import { NewAppointmentModal } from '../../appointments/components/NewAppointmentModal';
 
-
-// Actualizamos la interfaz para incluir el array de archivos (attachments)
 interface MedicalRecord {
   id: string;
   notes: string;
-  attachments: string[]; // URLs firmadas de Supabase
+  attachments: string[];
   createdAt: string;
   doctor: {
     name: string;
@@ -22,18 +20,31 @@ interface MedicalRecord {
   };
 }
 
+// --- NUEVO: Interfaz para los turnos integrados ---
+interface EmbeddedAppointment {
+  id: string;
+  date: string;
+  status: string;
+  doctor: { name: string };
+  specialty: { name: string };
+}
+
+// Extendemos la interfaz Patient temporalmente aquí para aceptar appointments
+interface PatientWithAppointments extends Patient {
+  appointments?: EmbeddedAppointment[];
+}
+
 export default function PatientDetailPage() {
   const params = useParams();
   const patientId = params.id as string;
   
-  const [patient, setPatient] = useState<Patient | null>(null);
+  const [patient, setPatient] = useState<PatientWithAppointments | null>(null);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   
   const [newNote, setNewNote] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null); // Estado para el PDF/Imagen
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Estado para controlar el modal de turnos
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -61,14 +72,11 @@ export default function PatientDetailPage() {
 
     setIsSubmitting(true);
     try {
-      // Le pasamos el texto y el archivo al servicio
       await medicalRecordsService.create(patientId, newNote, selectedFile);
       
-      // Limpiamos todo
       setNewNote('');
       setSelectedFile(null); 
       
-      // Reseteamos el input file a mano para que se borre el nombre de la UI
       const fileInput = document.getElementById('file-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
 
@@ -83,8 +91,35 @@ export default function PatientDetailPage() {
 
   if (!patient) return <div className="p-8 text-slate-500">Cargando paciente...</div>;
 
+  // --- LÓGICA DE TURNOS ---
+  const now = new Date();
+  
+  // Próximos turnos (futuros y no cancelados)
+  const upcomingAppointments = patient.appointments?.filter(app => 
+    new Date(app.date) >= now && app.status !== 'CANCELLED'
+  ) || [];
+
+  // Turnos pasados o cancelados
+  const pastAppointments = patient.appointments?.filter(app => 
+    new Date(app.date) < now || app.status === 'CANCELLED'
+  ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) || []; // Ordenados del más reciente al más antiguo
+
+
+  // Helper para el badge de estado
+  const getStatusBadge = (status: string) => {
+    switch(status) {
+      case 'PENDING': return <span className="px-2 py-1 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded">Pendiente</span>;
+      case 'CONFIRMED': return <span className="px-2 py-1 text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded">Confirmado</span>;
+      case 'IN_WAITING_ROOM': return <span className="px-2 py-1 text-[10px] font-semibold bg-amber-100 text-amber-700 rounded">En Espera</span>;
+      case 'ATTENDED': return <span className="px-2 py-1 text-[10px] font-semibold bg-purple-100 text-purple-700 rounded">Atendido</span>;
+      case 'CANCELLED': return <span className="px-2 py-1 text-[10px] font-semibold bg-red-100 text-red-700 rounded">Cancelado</span>;
+      default: return null;
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      
       {/* Header del Paciente */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -101,7 +136,6 @@ export default function PatientDetailPage() {
           </div>
         </div>
         
-        {/* Botón de Nuevo Turno */}
         <button 
           onClick={() => setIsAppointmentModalOpen(true)}
           className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
@@ -113,8 +147,10 @@ export default function PatientDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Columna Izquierda: Nueva Evolución */}
+        {/* Columna Izquierda */}
         <div className="lg:col-span-1 space-y-6">
+          
+          {/* Caja 1: Nueva Evolución */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <div className="flex items-center gap-2 mb-4 text-blue-600">
               <Stethoscope size={20} />
@@ -130,7 +166,6 @@ export default function PatientDetailPage() {
                 required
               />
               
-              {/* Input File para adjuntar estudios */}
               <div className="relative">
                 <input
                   type="file"
@@ -160,9 +195,69 @@ export default function PatientDetailPage() {
               </button>
             </form>
           </div>
+
+          {/* Caja 2: Resumen de Turnos */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-6">
+            
+            {/* Próximos Turnos */}
+            <div>
+              <div className="flex items-center gap-2 mb-3 text-emerald-600">
+                <CalendarDays size={18} />
+                <h3 className="font-bold text-slate-800 text-sm">Próximos Turnos</h3>
+              </div>
+              <div className="space-y-3">
+                {upcomingAppointments.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic">No hay turnos futuros programados.</p>
+                ) : (
+                  upcomingAppointments.map(app => (
+                    <div key={app.id} className="p-3 border border-slate-100 bg-slate-50 rounded-lg">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="text-xs font-semibold text-slate-800">
+                          {new Date(app.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} hs
+                        </span>
+                        {getStatusBadge(app.status)}
+                      </div>
+                      <p className="text-xs text-slate-600 truncate">{app.specialty.name} - {app.doctor.name}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <hr className="border-slate-100" />
+
+            {/* Historial de Turnos */}
+            <div>
+              <div className="flex items-center gap-2 mb-3 text-slate-500">
+                <History size={18} />
+                <h3 className="font-bold text-slate-800 text-sm">Últimos Turnos Pasados</h3>
+              </div>
+              <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                {pastAppointments.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic">No registra turnos previos.</p>
+                ) : (
+                  pastAppointments.map(app => (
+                    <div key={app.id} className="p-2 border-b border-slate-100 last:border-0 flex justify-between items-center">
+                      <div>
+                        <p className="text-xs font-medium text-slate-700">{app.specialty.name}</p>
+                        <p className="text-[10px] text-slate-400">
+                           {new Date(app.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })} - {app.doctor.name}
+                        </p>
+                      </div>
+                      <div>
+                         {getStatusBadge(app.status)}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+          </div>
+
         </div>
 
-        {/* Columna Derecha: Historial Histórico */}
+        {/* Columna Derecha: Historial Histórico (Sin cambios) */}
         <div className="lg:col-span-2">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
@@ -189,7 +284,6 @@ export default function PatientDetailPage() {
                     </div>
                     <p className="text-slate-600 text-sm whitespace-pre-wrap mb-3">{record.notes}</p>
                     
-                    {/* Si la nota tiene archivos adjuntos, los mostramos como botones clickeables */}
                     {record.attachments && record.attachments.length > 0 && (
                       <div className="flex gap-2">
                         {record.attachments.map((url, index) => (
@@ -215,12 +309,14 @@ export default function PatientDetailPage() {
         
       </div>
 
-      {/* Modal de Agendar Turno Oculto al final */}
       <NewAppointmentModal 
         isOpen={isAppointmentModalOpen}
         onClose={() => setIsAppointmentModalOpen(false)}
-        onSuccess={() => setIsAppointmentModalOpen(false)}
-        preselectedPatientId={patient.id} // ¡Acá le mandamos el ID para que lo autoseleccione!
+        onSuccess={() => {
+          setIsAppointmentModalOpen(false);
+          loadData(); // Recargamos para que el turno nuevo aparezca en "Próximos Turnos"
+        }}
+        preselectedPatientId={patient.id} 
       />
     </div>
   );

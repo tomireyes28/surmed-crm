@@ -74,7 +74,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <nav className="flex-1 py-6 flex flex-col gap-2 px-3">
           {visibleMenuItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            // FIX: Si es la raíz del dashboard, coincidencia exacta. Si no, permite sub-rutas.
+            const isActive = item.href === '/dashboard' 
+              ? pathname === '/dashboard' 
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              
             const Icon = item.icon;
             return (
               <Link
