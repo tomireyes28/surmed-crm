@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { patientsService } from '@/services/patients.service';
 import { Patient } from '@/schemas/patient.schema';
-import { Search, Plus, FileText } from 'lucide-react';
+import { Search, Plus, FileText, Pencil, ArchiveX } from 'lucide-react';
 import Link from 'next/link';
 
 export default function PatientsPage() {
@@ -11,22 +11,39 @@ export default function PatientsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchPatients = async () => {
-      try {
-        const data = await patientsService.getAll();
-        setPatients(data);
-      } catch (error) {
-        console.error('Error cargando pacientes:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchPatients();
+  const fetchPatients = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await patientsService.getAll();
+      setPatients(data);
+    } catch (error) {
+      console.error('Error cargando pacientes:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  // Filtramos los pacientes según lo que el usuario escriba en el buscador
+  useEffect(() => {
+    const load = async () => {
+      await fetchPatients();
+    };
+    load();
+  }, [fetchPatients]);
+
+  const handleArchive = async (id: string, name: string) => {
+    const isConfirmed = window.confirm(`¿Estás seguro de que deseas archivar a ${name}? Dejará de aparecer en las listas principales.`);
+    
+    if (isConfirmed) {
+      try {
+        await patientsService.archive(id);
+        fetchPatients(); // Recargamos la tabla para que desaparezca
+      } catch (error) {
+        console.error('Error al archivar:', error);
+        alert('Hubo un problema al archivar el paciente.');
+      }
+    }
+  };
+
   const filteredPatients = patients.filter((p) => {
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -38,7 +55,6 @@ export default function PatientsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header y Buscador */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold text-slate-800">Pacientes</h1>
         
@@ -64,7 +80,6 @@ export default function PatientsPage() {
         </div>
       </div>
 
-      {/* Tabla */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -92,11 +107,10 @@ export default function PatientsPage() {
                 </tr>
               ) : (
                 filteredPatients.map((patient) => {
-                  // Calculamos la edad rápido
                   const age = new Date().getFullYear() - new Date(patient.birthDate).getFullYear();
                   
                   return (
-                    <tr key={patient.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={patient.id} className="hover:bg-slate-50 transition-colors group">
                       <td className="px-6 py-4 text-sm font-medium text-slate-700">
                         {patient.documentId}
                       </td>
@@ -110,13 +124,30 @@ export default function PatientsPage() {
                         {age} años
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <Link 
-                          href={`/dashboard/patients/${patient.id}`}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center justify-end gap-1"
-                        >
-                          <FileText size={16} />
-                          Historia Clínica
-                        </Link>
+                        {/* NUEVO GRUPO DE ACCIONES */}
+                        <div className="flex items-center justify-end gap-3 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <Link 
+                            href={`/dashboard/patients/${patient.id}`}
+                            title="Historia Clínica"
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            <FileText size={18} />
+                          </Link>
+                          <Link 
+                            href={`/dashboard/patients/${patient.id}/edit`}
+                            title="Editar Paciente"
+                            className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                          >
+                            <Pencil size={18} />
+                          </Link>
+                          <button 
+                            onClick={() => handleArchive(patient.id, `${patient.lastName}, ${patient.firstName}`)}
+                            title="Archivar Paciente"
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <ArchiveX size={18} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

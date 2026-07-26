@@ -42,6 +42,8 @@ model Patient {
   phone          String?
   birthDate      DateTime
   address        String?
+
+  isActive       Boolean         @default(true)
   
   medicalRecords MedicalRecord[] 
   invoices       Invoice[]       

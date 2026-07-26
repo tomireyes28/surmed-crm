@@ -16,7 +16,7 @@ export class PatientsService {
       throw new ConflictException('Ya existe un paciente registrado con este documento');
     }
 
-    return this.prisma.patient.create({
+    return await this.prisma.patient.create({
       data: {
         ...createPatientDto,
         birthDate: new Date(createPatientDto.birthDate), 
@@ -25,21 +25,21 @@ export class PatientsService {
   }
 
   async findAll() {
-    return this.prisma.patient.findMany({
+    return await this.prisma.patient.findMany({
+      where: { isActive: true }, 
       orderBy: { lastName: 'asc' }, 
     });
   }
 
   async findOne(id: string) {
-    return this.prisma.patient.findUnique({
+    return await this.prisma.patient.findUnique({
       where: { id },
       include: {
         medicalRecords: {
-          orderBy: { createdAt: 'desc' } // Ya que estamos, ordenamos las notas de más nuevas a más viejas
+          orderBy: { createdAt: 'desc' }
         },
-        // --- NUEVO: Traemos los turnos del paciente ---
         appointments: {
-          orderBy: { date: 'asc' }, // Orden cronológico
+          orderBy: { date: 'asc' },
           include: {
             doctor: { select: { name: true } },
             specialty: { select: { name: true } },
@@ -49,16 +49,17 @@ export class PatientsService {
     });
   }
 
-  update(id: string, updatePatientDto: UpdatePatientDto) {
-    return this.prisma.patient.update({
+  async update(id: string, updatePatientDto: UpdatePatientDto) {
+    return await this.prisma.patient.update({
       where: { id },
       data: updatePatientDto,
     });
   }
 
-  remove(id: string) {
-    return this.prisma.patient.delete({
+  async remove(id: string) {
+    return await this.prisma.patient.update({
       where: { id },
+      data: { isActive: false }
     });
   }
 }
