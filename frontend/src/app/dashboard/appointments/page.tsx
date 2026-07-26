@@ -27,7 +27,6 @@ export default function AppointmentsPage() {
     }
   }, []);
 
-  // EL FIX 2: Envolvemos la llamada en una función asíncrona interna
   useEffect(() => {
     const load = async () => {
       await fetchAppointments();
@@ -37,11 +36,12 @@ export default function AppointmentsPage() {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col space-y-4">
-        <NewAppointmentModal 
-      isOpen={isModalOpen}
-      onClose={() => setIsModalOpen(false)}
-      onSuccess={fetchAppointments}
-    />
+      <NewAppointmentModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={fetchAppointments}
+      />
+      
       <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-3">
           <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600">
@@ -58,14 +58,14 @@ export default function AppointmentsPage() {
         </button>
       </div>
 
-      {/* --- AGREGAR ESTO: LEYENDA DE ESTADOS --- */}
-      <div className="flex items-center gap-4 px-2 text-sm text-slate-600">
+      {/* LEYENDA ACTUALIZADA */}
+      <div className="flex flex-wrap items-center gap-4 px-2 text-sm text-slate-600">
         <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Pendiente</span>
         <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-500"></div> Confirmado</span>
         <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-500"></div> En Espera</span>
+        <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-purple-500"></div> Atendido</span>
         <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-500"></div> Cancelado</span>
       </div>
-      {/* -------------------------------------- */}
 
       <div className="flex-1 bg-white p-4 rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         {isLoading ? (
@@ -79,6 +79,7 @@ export default function AppointmentsPage() {
             onViewChange={setView}
             date={date}
             onDateChange={setDate}
+            onAppointmentUpdated={fetchAppointments} // <-- AHORA SÍ CONECTADO
           />
         )}
       </div>

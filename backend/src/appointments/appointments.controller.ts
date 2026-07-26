@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, UseGuards } from '@nestjs/common';
 import { AppointmentsService } from './appointments.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiTags } from '@nestjs/swagger';
-import { Appointment } from '@prisma/client';
+import { Appointment, AppointmentStatus } from '@prisma/client'; // <-- Importamos el enum
 
 @ApiTags('Turnos')
 @UseGuards(JwtAuthGuard)
@@ -19,5 +19,14 @@ export class AppointmentsController {
   @Get()
   async findAll(): Promise<Appointment[]> {
     return this.appointmentsService.findAll();
+  }
+
+  // --- NUEVO: Endpoint PATCH ---
+  @Patch(':id/status')
+  async updateStatus(
+    @Param('id') id: string,
+    @Body('status') status: AppointmentStatus,
+  ): Promise<Appointment> {
+    return this.appointmentsService.updateStatus(id, status);
   }
 }
