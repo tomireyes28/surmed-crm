@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image'; // <-- 1. Importamos el componente Image de Next.js
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Cookies from 'js-cookie';
-// 2. Importamos el ícono Calendar para la Agenda
-import { Users, Package, FileText, LogOut, Activity, Menu, Calendar } from 'lucide-react'; 
+// Importamos el icono UsersCog o BadgeInfo para el Staff. Usaré BadgeInfo (Shield también es buena opción).
+import { Users, Package, FileText, LogOut, Activity, Menu, Calendar, Shield } from 'lucide-react'; 
 import { useState, useEffect } from 'react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -34,9 +34,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const menuItems = [
     { name: 'Dashboard', href: '/dashboard', icon: Activity, allowedRoles: ['ADMIN', 'MEDICO'] },
-    // <-- 3. Agregamos la Agenda acá para que aparezca segunda en la lista
     { name: 'Agenda', href: '/dashboard/appointments', icon: Calendar, allowedRoles: ['ADMIN', 'MEDICO', 'RECEPCION'] },
     { name: 'Pacientes', href: '/dashboard/patients', icon: Users, allowedRoles: ['ADMIN', 'MEDICO'] },
+    // --- NUEVO ITEM: Staff ---
+    { name: 'Staff', href: '/dashboard/staff', icon: Shield, allowedRoles: ['ADMIN'] }, 
     { name: 'Inventario', href: '/dashboard/inventory', icon: Package, allowedRoles: ['ADMIN'] },
     { name: 'Facturación', href: '/dashboard/invoices', icon: FileText, allowedRoles: ['ADMIN'] },
   ];
@@ -53,7 +54,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
       <aside className={`bg-slate-900 text-white transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col`}>
-        {/* ACÁ ESTÁ EL CAMBIO DEL LOGO CON EL COMPONENTE <Image /> */}
         <div className="h-20 flex items-center justify-center border-b border-slate-800 py-3">
           {/* Logo cuando el menú está abierto */}
           <div className={`${!isSidebarOpen ? 'hidden' : 'block'}`}>
@@ -63,7 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               width={140} 
               height={50} 
               className="object-contain"
-              priority // Le dice a Next que cargue esta imagen rápido porque es importante
+              priority 
             />
           </div>
           {/* Icono colapsado cuando el menú está cerrado (Letra S verde) */}
@@ -74,7 +74,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <nav className="flex-1 py-6 flex flex-col gap-2 px-3">
           {visibleMenuItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
             return (
               <Link

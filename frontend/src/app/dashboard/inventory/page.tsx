@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { inventoryService } from '@/services/inventory.service';
 import { Product } from '@/schemas/inventory.schema';
-import { Search, Plus, AlertTriangle, ArrowRightLeft, Package } from 'lucide-react';
+import { Search, Plus, Minus, AlertTriangle, Package } from 'lucide-react';
 import { NewProductModal } from './NewProductModal';
 import { StockMovementModal } from './StockMovementModal';
 
@@ -12,11 +12,16 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   
-  // Nuevo estado para la categoría seleccionada
   const [activeCategory, setActiveCategory] = useState<string>('TODOS');
   
   const [isNewProductOpen, setIsNewProductOpen] = useState(false);
   const [isMovementOpen, setIsMovementOpen] = useState(false);
+  
+  // Guardamos qué producto se seleccionó y si es entrada o salida para pasarlo al modal
+  const [selectedMovement, setSelectedMovement] = useState<{product: Product | null, type: 'IN' | 'OUT'}>({
+    product: null,
+    type: 'IN'
+  });
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -36,7 +41,11 @@ export default function InventoryPage() {
     load();
   }, [fetchProducts]);
 
-  // Filtramos por búsqueda de texto Y por la pestaña activa
+  const handleOpenMovement = (product: Product, type: 'IN' | 'OUT') => {
+    setSelectedMovement({ product, type });
+    setIsMovementOpen(true);
+  };
+
   const filteredProducts = products.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = activeCategory === 'TODOS' || p.category === activeCategory;
@@ -51,12 +60,20 @@ export default function InventoryPage() {
         onSuccess={fetchProducts} 
       />
       
-      <StockMovementModal 
-        isOpen={isMovementOpen} 
-        onClose={() => setIsMovementOpen(false)} 
-        onSuccess={fetchProducts}
-        products={products}
-      />
+      {/* Actualizamos cómo llamamos al Modal */}
+      {selectedMovement.product && (
+        <StockMovementModal 
+          isOpen={isMovementOpen} 
+          onClose={() => {
+            setIsMovementOpen(false);
+            // Pequeño timeout para no ver cómo cambia la UI mientras se cierra el modal
+            setTimeout(() => setSelectedMovement({ product: null, type: 'IN' }), 300);
+          }} 
+          onSuccess={fetchProducts}
+          preSelectedProduct={selectedMovement.product}
+          movementType={selectedMovement.type}
+        />
+      )}
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold text-slate-800">Inventario</h1>
@@ -73,13 +90,7 @@ export default function InventoryPage() {
             />
           </div>
           
-          <button 
-            onClick={() => setIsMovementOpen(true)}
-            className="bg-slate-100 text-slate-700 border border-slate-300 px-4 py-2 rounded-lg font-medium hover:bg-slate-200 transition-colors flex items-center gap-2 whitespace-nowrap"
-          >
-            <ArrowRightLeft size={20} />
-            <span className="hidden sm:inline">Movimiento</span>
-          </button>
+          {/* Oculté el botón general de movimiento para usar los individuales en la tabla */}
 
           <button 
             onClick={() => setIsNewProductOpen(true)}
@@ -125,18 +136,19 @@ export default function InventoryPage() {
                 <th className="px-6 py-4 font-medium text-center">Stock Mínimo</th>
                 <th className="px-6 py-4 font-medium">Categoría</th>
                 <th className="px-6 py-4 font-medium text-center">Estado</th>
+                <th className="px-6 py-4 font-medium text-center">Acciones</th> {/* Columna nueva */}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
                     Cargando inventario...
                   </td>
                 </tr>
               ) : filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500 flex flex-col items-center gap-2">
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500 flex flex-col items-center gap-2">
                     <Package className="text-slate-300 mx-auto" size={32} />
                     <p>No hay productos en esta categoría.</p>
                   </td>
@@ -176,6 +188,25 @@ export default function InventoryPage() {
                           Adecuado
                         </span>
                       )}
+                    </td>
+                    {/* Botones de acción directos */}
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                         <button 
+                            onClick={() => handleOpenMovement(product, 'IN')}
+                            title="Ingresar Stock"
+                            className="p-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-md transition-colors"
+                          >
+                           <Plus size={16} />
+                         </button>
+                         <button 
+                            onClick={() => handleOpenMovement(product, 'OUT')}
+                            title="Descontar Stock"
+                            className="p-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md transition-colors"
+                          >
+                           <Minus size={16} />
+                         </button>
+                      </div>
                     </td>
                   </tr>
                 ))
