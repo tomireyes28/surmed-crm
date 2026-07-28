@@ -1,15 +1,18 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role } from '@prisma/client';
-import { CreateUserDto } from './dto/create-user.dto'; // Importamos el DTO
+import { CreateUserDto } from './dto/create-user.dto'; 
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(role?: string) {
-    return this.prisma.user.findMany({
-      where: role ? { role: role as Role } : undefined,
+    return await this.prisma.user.findMany({
+      where: {
+        isActive: true, // <-- FIX: Solo activos
+        ...(role && { role: role as Role }) // Mantenemos el filtro por rol si existe
+      },
       select: {
         id: true,
         name: true,
@@ -21,7 +24,20 @@ export class UsersService {
     });
   }
 
-  async create(data: CreateUserDto) { // Reemplazamos 'any' por el DTO
+  async findOne(id: string) {
+    return await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        specialties: true,
+      }
+    });
+  }
+
+  async create(data: CreateUserDto) { 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: data.email },
     });
@@ -30,7 +46,7 @@ export class UsersService {
       throw new ConflictException('Ya existe un usuario con este email.');
     }
 
-    return this.prisma.user.create({
+    return await this.prisma.user.create({
       data: {
         name: data.name,
         email: data.email,
@@ -42,6 +58,24 @@ export class UsersService {
           }
         } : {})
       },
+    });
+  }
+
+  async update(id: string, data: Partial<CreateUserDto>) {
+    return await this.prisma.user.update({
+      where: { id },
+      data: {
+        name: data.name,
+        email: data.email,
+        role: data.role,
+      },
+    });
+  }
+
+  async remove(id: string) {
+    return await this.prisma.user.update({
+      where: { id },
+      data: { isActive: false }, // <-- FIX: Borrado lógico
     });
   }
 }
