@@ -12,6 +12,7 @@ import { InvoicesModule } from './invoices/invoices.module';
 import { SpecialtiesModule } from './specialties/specialties.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { UsersModule } from './users/users.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module';
     SpecialtiesModule,
     AppointmentsModule,
     UsersModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
