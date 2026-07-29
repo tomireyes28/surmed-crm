@@ -26,6 +26,13 @@ export interface CreateUserDto {
   specialtyId?: string;
 }
 
+// 4. NUEVO: DTO para tipar lo que enviamos al actualizar
+export interface UpdateUserDto {
+  name?: string;
+  email?: string;
+  role?: 'ADMIN' | 'MEDICO' | 'RECEPCION';
+}
+
 export const usersService = {
   // Obtener todo el staff para la tabla general
   getAll: async (): Promise<User[]> => {
@@ -44,6 +51,23 @@ export const usersService = {
   // Crear un nuevo integrante del equipo
   create: async (userData: CreateUserDto): Promise<User> => {
     const { data } = await api.post<User>('/users', userData);
+    return data;
+  },
+
+  // --- NUEVAS FUNCIONES PARA EDICIÓN Y BORRADO LÓGICO ---
+
+  getById: async (id: string): Promise<User> => {
+    const { data } = await api.get<User>(`/users/${id}`);
+    return data;
+  },
+
+  update: async (id: string, userData: UpdateUserDto): Promise<User> => {
+    const { data } = await api.patch<User>(`/users/${id}`, userData);
+    return data;
+  },
+
+  deactivate: async (id: string): Promise<User> => {
+    const { data } = await api.delete<User>(`/users/${id}`);
     return data;
   }
 };

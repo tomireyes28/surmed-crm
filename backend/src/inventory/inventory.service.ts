@@ -8,8 +8,8 @@ export class InventoryService {
   constructor(private prisma: PrismaService) {}
 
   // 1. Crear un producto nuevo (arranca con stock 0 por defecto)
-  createProduct(dto: CreateProductDto) {
-    return this.prisma.product.create({
+  async createProduct(dto: CreateProductDto) {
+    return await this.prisma.product.create({
       data: dto,
     });
   }
@@ -17,6 +17,7 @@ export class InventoryService {
   // 2. Traer todo el inventario (y avisar si algo tiene poco stock)
   async findAllProducts() {
     const products = await this.prisma.product.findMany({
+      where: { isActive: true }, // <-- FIX: Ocultamos los desactivados
       orderBy: { name: 'asc' },
     });
 
@@ -27,7 +28,33 @@ export class InventoryService {
     }));
   }
 
-  // 3. Registrar un ingreso o consumo de stock
+  // 3. Traer un solo producto (para el formulario de edición)
+  async findOne(id: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+    });
+    
+    if (!product) throw new NotFoundException('Producto no encontrado');
+    return product;
+  }
+
+  // 4. Actualizar datos de un producto (nombre, categoría, stock mínimo)
+  async updateProduct(id: string, data: Partial<CreateProductDto>) {
+    return await this.prisma.product.update({
+      where: { id },
+      data,
+    });
+  }
+
+  // 5. Borrado Lógico (Desactivar)
+  async deactivateProduct(id: string) {
+    return await this.prisma.product.update({
+      where: { id },
+      data: { isActive: false },
+    });
+  }
+
+  // 6. Registrar un ingreso o consumo de stock
   async registerMovement(dto: StockMovementDto, userId: string) {
     const product = await this.prisma.product.findUnique({
       where: { id: dto.productId },
@@ -41,9 +68,9 @@ export class InventoryService {
       throw new BadRequestException(`Stock insuficiente. Quedan ${product.quantity} unidades.`);
     }
 
-    // Usamos $transaction para asegurar que ambas operaciones (crear movimiento y actualizar stock) se hagan juntas
-    return this.prisma.$transaction(async (prisma) => {
-      // A. Guardamos el registro de quién lo sacó/metió
+    // Usamos $transaction para asegurar que ambas operaciones se hagan juntas
+    return await this.prisma.$transaction(async (prisma) => {
+      // A. Guardamos el registro
       const movement = await prisma.stockMovement.create({
         data: {
           productId: dto.productId,
@@ -54,7 +81,7 @@ export class InventoryService {
         },
       });
 
-      // B. Actualizamos la cantidad total del producto
+      // B. Actualizamos la cantidad total
       const updatedProduct = await prisma.product.update({
         where: { id: dto.productId },
         data: {

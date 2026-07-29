@@ -22,7 +22,10 @@ export default function StaffPage() {
   }, []);
 
   useEffect(() => {
-    fetchUsers();
+    const load = async () => {
+      await fetchUsers();
+    };
+    load();
   }, [fetchUsers]);
 
   const handleDeactivate = async (id: string, name: string) => {

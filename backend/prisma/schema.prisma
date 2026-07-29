@@ -87,6 +87,7 @@ model Product {
   price       Float?   
   
   category    ProductCategory @default(INSUMO_MEDICO)
+  isActive    Boolean         @default(true)
   
   movements   StockMovement[]
 
