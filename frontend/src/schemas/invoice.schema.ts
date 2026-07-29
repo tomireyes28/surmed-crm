@@ -21,6 +21,7 @@ export interface Invoice {
   patientId: string;
   totalAmount: number;
   createdAt: string;
+  status: 'PENDING' | 'PAID' | 'CANCELLED';
   patient: {
     firstName: string;
     lastName: string;

@@ -36,7 +36,10 @@ export default function InventoryPage() {
   }, []);
 
   useEffect(() => {
-    fetchProducts();
+    const load = async () => {
+      await fetchProducts();
+    };
+    load();
   }, [fetchProducts]);
 
   const handleOpenMovement = (product: Product, type: 'IN' | 'OUT') => {

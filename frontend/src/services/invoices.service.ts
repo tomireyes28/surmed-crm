@@ -10,5 +10,7 @@ export const invoicesService = {
   create: async (invoice: InvoiceFormValues) => {
     const { data } = await api.post('/invoices', invoice);
     return data;
-  }
+  },
+
+  cancel: async (id: string) => await api.patch('/invoices/' + id + '/cancel')
 };

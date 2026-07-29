@@ -7,7 +7,6 @@ export class InvoicesService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateInvoiceDto) {
-    // 1. Verificamos que el paciente exista
     const patient = await this.prisma.patient.findUnique({
       where: { id: dto.patientId },
     });
@@ -16,14 +15,12 @@ export class InvoicesService {
       throw new NotFoundException('Paciente no encontrado');
     }
 
-    // 2. Calculamos el total absoluto sumando (cantidad * precio) de cada ítem
     const totalAmount = dto.items.reduce(
       (acc, item) => acc + (item.quantity * item.unitPrice),
       0
     );
 
-    // 3. Creamos la factura y los ítems en cascada
-    return this.prisma.invoice.create({
+    return await this.prisma.invoice.create({
       data: {
         patientId: dto.patientId,
         totalAmount,
@@ -37,15 +34,14 @@ export class InvoicesService {
         },
       },
       include: {
-        items: true, // Devolvemos la factura creada con sus ítems
+        items: true, 
         patient: { select: { firstName: true, lastName: true, documentId: true } },
       },
     });
   }
 
-  // Permite traer todas las facturas, o filtrarlas por paciente si pasamos el patientId
-  findAll(patientId?: string) {
-    return this.prisma.invoice.findMany({
+  async findAll(patientId?: string) {
+    return await this.prisma.invoice.findMany({
       where: patientId ? { patientId } : undefined,
       orderBy: { createdAt: 'desc' },
       include: {
@@ -55,13 +51,28 @@ export class InvoicesService {
     });
   }
 
-  findOne(id: string) {
-    return this.prisma.invoice.findUnique({
+  async findOne(id: string) {
+    return await this.prisma.invoice.findUnique({
       where: { id },
       include: {
         patient: { select: { id: true, firstName: true, lastName: true, documentId: true } },
         items: true,
       },
+    });
+  }
+
+  // --- NUEVO: Anulación de facturas ---
+  async cancelInvoice(id: string) {
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+    return await this.prisma.invoice.update({
+      where: { id },
+      data: { status: 'CANCELLED' },
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true, documentId: true } },
+        items: true,
+      }
     });
   }
 }

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { invoicesService } from '@/services/invoices.service';
 import { Invoice } from '@/schemas/invoice.schema';
-import { Search, Plus, Receipt, Download } from 'lucide-react';
+import { Search, Plus, Receipt, Download, Ban } from 'lucide-react';
 import Link from 'next/link';
 import { generateInvoicePDF } from '@/utils/pdfGenerator';
 
@@ -12,20 +12,39 @@ export default function InvoicesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchInvoices = async () => {
-      try {
-        const data = await invoicesService.getAll();
-        setInvoices(data);
-      } catch (error) {
-        console.error('Error cargando facturas:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchInvoices();
+  const fetchInvoices = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await invoicesService.getAll();
+      setInvoices(data);
+    } catch (error) {
+      console.error('Error cargando facturas:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      await fetchInvoices();
+    };
+    load();
+  }, [fetchInvoices]);
+
+  // NUEVO: Función para anular la factura
+  const handleCancel = async (id: string, invoiceNumber: string) => {
+    const isConfirmed = window.confirm(`¿Estás seguro de que deseas anular la factura ${invoiceNumber}? Esta acción no se puede deshacer y el monto dejará de sumar a los ingresos totales.`);
+    
+    if (isConfirmed) {
+      try {
+        await invoicesService.cancel(id);
+        fetchInvoices();
+      } catch (error) {
+        console.error('Error al anular:', error);
+        alert('Ocurrió un error al intentar anular la factura.');
+      }
+    }
+  };
 
   const filteredInvoices = invoices.filter((inv) => {
     const searchLower = searchTerm.toLowerCase();
@@ -71,6 +90,7 @@ export default function InvoicesPage() {
                 <th className="px-6 py-4 font-medium">Nº Comprobante</th>
                 <th className="px-6 py-4 font-medium">Fecha</th>
                 <th className="px-6 py-4 font-medium">Paciente</th>
+                <th className="px-6 py-4 font-medium">Estado</th>
                 <th className="px-6 py-4 font-medium text-right">Total</th>
                 <th className="px-6 py-4 font-medium text-center">Acciones</th>
               </tr>
@@ -78,45 +98,71 @@ export default function InvoicesPage() {
             <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
                     Cargando facturas...
                   </td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
                     No se encontraron facturas emitidas.
                   </td>
                 </tr>
               ) : (
-                filteredInvoices.map((invoice) => (
-                  <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-slate-700 flex items-center gap-2">
-                      <Receipt size={16} className="text-slate-400" />
-                      FAC-{invoice.id.split('-')[0].toUpperCase()}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
-                      {new Date(invoice.createdAt).toLocaleDateString('es-AR')}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-800">
-                      {invoice.patient.lastName}, {invoice.patient.firstName}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-emerald-600 font-bold">
-                        ${invoice.totalAmount.toLocaleString('es-AR')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={() => generateInvoicePDF(invoice)}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-flex justify-center items-center"
-                        title="Descargar Factura en PDF"
-                      >
-                        <Download size={20} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                filteredInvoices.map((invoice) => {
+                  const isCancelled = invoice.status === 'CANCELLED';
+                  const invoiceNumber = `FAC-${invoice.id.split('-')[0].toUpperCase()}`;
+                  
+                  return (
+                    <tr key={invoice.id} className={`transition-colors group ${isCancelled ? 'bg-slate-50/50' : 'hover:bg-slate-50'}`}>
+                      <td className={`px-6 py-4 text-sm font-medium flex items-center gap-2 ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                        <Receipt size={16} className={isCancelled ? 'text-slate-300' : 'text-slate-400'} />
+                        {invoiceNumber}
+                      </td>
+                      <td className={`px-6 py-4 text-sm ${isCancelled ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {new Date(invoice.createdAt).toLocaleDateString('es-AR')}
+                      </td>
+                      <td className={`px-6 py-4 text-sm ${isCancelled ? 'text-slate-400' : 'text-slate-800'}`}>
+                        {invoice.patient.lastName}, {invoice.patient.firstName}
+                      </td>
+                      <td className="px-6 py-4">
+                        {isCancelled ? (
+                          <span className="px-2 py-1 text-[10px] font-semibold bg-red-100 text-red-700 rounded uppercase">Anulada</span>
+                        ) : (
+                          <span className="px-2 py-1 text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded uppercase">Emitida</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className={`font-bold ${isCancelled ? 'text-slate-400 line-through' : 'text-emerald-600'}`}>
+                          ${invoice.totalAmount.toLocaleString('es-AR')}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {/* El botón de descargar siempre está */}
+                          <button
+                            onClick={() => generateInvoicePDF(invoice)}
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Descargar PDF"
+                          >
+                            <Download size={18} />
+                          </button>
+                          
+                          {/* El botón de anular solo aparece si no está anulada */}
+                          {!isCancelled && (
+                            <button
+                              onClick={() => handleCancel(invoice.id, invoiceNumber)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                              title="Anular Factura"
+                            >
+                              <Ban size={18} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
