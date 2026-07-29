@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { inventoryService } from '@/services/inventory.service';
 import { Product } from '@/schemas/inventory.schema';
-import { Search, Plus, Minus, AlertTriangle, Package } from 'lucide-react';
+import { Search, Plus, Minus, AlertTriangle, Package, Pencil, ArchiveX } from 'lucide-react';
+import Link from 'next/link';
 import { NewProductModal } from './NewProductModal';
 import { StockMovementModal } from './StockMovementModal';
 
@@ -17,7 +18,6 @@ export default function InventoryPage() {
   const [isNewProductOpen, setIsNewProductOpen] = useState(false);
   const [isMovementOpen, setIsMovementOpen] = useState(false);
   
-  // Guardamos qué producto se seleccionó y si es entrada o salida para pasarlo al modal
   const [selectedMovement, setSelectedMovement] = useState<{product: Product | null, type: 'IN' | 'OUT'}>({
     product: null,
     type: 'IN'
@@ -25,6 +25,7 @@ export default function InventoryPage() {
 
   const fetchProducts = useCallback(async () => {
     try {
+      setIsLoading(true);
       const data = await inventoryService.getProducts();
       setProducts(data);
     } catch (error) {
@@ -35,15 +36,26 @@ export default function InventoryPage() {
   }, []);
 
   useEffect(() => {
-    const load = async () => {
-      await fetchProducts();
-    };
-    load();
+    fetchProducts();
   }, [fetchProducts]);
 
   const handleOpenMovement = (product: Product, type: 'IN' | 'OUT') => {
     setSelectedMovement({ product, type });
     setIsMovementOpen(true);
+  };
+
+  // NUEVO: Función para desactivar/archivar un insumo
+  const handleDeactivate = async (id: string, name: string) => {
+    const isConfirmed = window.confirm(`¿Estás seguro de que deseas archivar el insumo "${name}"? Dejará de aparecer en las listas activas.`);
+    if (isConfirmed) {
+      try {
+        await inventoryService.deactivateProduct(id);
+        fetchProducts(); // Recargamos la tabla
+      } catch (error) {
+        console.error('Error al archivar insumo:', error);
+        alert('Hubo un problema al archivar el insumo.');
+      }
+    }
   };
 
   const filteredProducts = products.filter((p) => {
@@ -60,13 +72,11 @@ export default function InventoryPage() {
         onSuccess={fetchProducts} 
       />
       
-      {/* Actualizamos cómo llamamos al Modal */}
       {selectedMovement.product && (
         <StockMovementModal 
           isOpen={isMovementOpen} 
           onClose={() => {
             setIsMovementOpen(false);
-            // Pequeño timeout para no ver cómo cambia la UI mientras se cierra el modal
             setTimeout(() => setSelectedMovement({ product: null, type: 'IN' }), 300);
           }} 
           onSuccess={fetchProducts}
@@ -90,8 +100,6 @@ export default function InventoryPage() {
             />
           </div>
           
-          {/* Oculté el botón general de movimiento para usar los individuales en la tabla */}
-
           <button 
             onClick={() => setIsNewProductOpen(true)}
             className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2 whitespace-nowrap"
@@ -104,7 +112,6 @@ export default function InventoryPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         
-        {/* PESTAÑAS (TABS) */}
         <div className="flex border-b border-slate-200 px-4 pt-2 overflow-x-auto hide-scrollbar">
           {[
             { id: 'TODOS', label: 'Todos' },
@@ -126,7 +133,6 @@ export default function InventoryPage() {
           ))}
         </div>
 
-        {/* Tabla */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -136,7 +142,7 @@ export default function InventoryPage() {
                 <th className="px-6 py-4 font-medium text-center">Stock Mínimo</th>
                 <th className="px-6 py-4 font-medium">Categoría</th>
                 <th className="px-6 py-4 font-medium text-center">Estado</th>
-                <th className="px-6 py-4 font-medium text-center">Acciones</th> {/* Columna nueva */}
+                <th className="px-6 py-4 font-medium text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -157,7 +163,7 @@ export default function InventoryPage() {
                 filteredProducts.map((product) => (
                   <tr 
                     key={product.id} 
-                    className={`transition-colors ${product.isLowStock ? 'bg-red-50/50 hover:bg-red-50' : 'hover:bg-slate-50'}`}
+                    className={`transition-colors group ${product.isLowStock ? 'bg-red-50/50 hover:bg-red-50' : 'hover:bg-slate-50'}`}
                   >
                     <td className="px-6 py-4">
                       <p className="text-sm font-medium text-slate-800">{product.name}</p>
@@ -189,23 +195,45 @@ export default function InventoryPage() {
                         </span>
                       )}
                     </td>
-                    {/* Botones de acción directos */}
+                    
+                    {/* NUEVO: Columna de Acciones con botones integrados */}
                     <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                         <button 
-                            onClick={() => handleOpenMovement(product, 'IN')}
-                            title="Ingresar Stock"
-                            className="p-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-md transition-colors"
-                          >
-                           <Plus size={16} />
-                         </button>
-                         <button 
-                            onClick={() => handleOpenMovement(product, 'OUT')}
-                            title="Descontar Stock"
-                            className="p-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md transition-colors"
-                          >
-                           <Minus size={16} />
-                         </button>
+                      <div className="flex items-center justify-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                        
+                        {/* Controles de Stock */}
+                        <button 
+                          onClick={() => handleOpenMovement(product, 'IN')}
+                          title="Ingresar Stock"
+                          className="p-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-md transition-colors"
+                        >
+                          <Plus size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleOpenMovement(product, 'OUT')}
+                          title="Descontar Stock"
+                          className="p-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md transition-colors"
+                        >
+                          <Minus size={16} />
+                        </button>
+
+                        <div className="w-px h-6 bg-slate-200 mx-1"></div> {/* Separador Visual */}
+
+                        {/* Controles Administrativos */}
+                        <Link 
+                          href={`/dashboard/inventory/${product.id}/edit`}
+                          title="Editar Insumo"
+                          className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                        >
+                          <Pencil size={16} />
+                        </Link>
+                        <button 
+                          onClick={() => handleDeactivate(product.id, product.name)}
+                          title="Archivar Insumo"
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        >
+                          <ArchiveX size={16} />
+                        </button>
+
                       </div>
                     </td>
                   </tr>
