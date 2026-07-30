@@ -6,8 +6,11 @@ import { patientsService } from '@/services/patients.service';
 import { medicalRecordsService } from '@/services/medicalRecords.service';
 import { Patient } from '@/schemas/patient.schema';
 import Link from 'next/link';
-import { ArrowLeft, Stethoscope, Clock, Send, Paperclip, FileText as FileIcon, CalendarPlus, CalendarDays, History } from 'lucide-react';
+// Sumamos el ícono Lock para el mensaje de restricción
+import { ArrowLeft, Stethoscope, Clock, Send, Paperclip, FileText as FileIcon, CalendarPlus, CalendarDays, History, Lock } from 'lucide-react';
 import { NewAppointmentModal } from '../../appointments/components/NewAppointmentModal';
+// Importamos el store de sesión
+import { useAuthStore } from '@/store/authStore'; 
 
 interface MedicalRecord {
   id: string;
@@ -20,7 +23,6 @@ interface MedicalRecord {
   };
 }
 
-// --- NUEVO: Interfaz para los turnos integrados ---
 interface EmbeddedAppointment {
   id: string;
   date: string;
@@ -29,7 +31,6 @@ interface EmbeddedAppointment {
   specialty: { name: string };
 }
 
-// Extendemos la interfaz Patient temporalmente aquí para aceptar appointments
 interface PatientWithAppointments extends Patient {
   appointments?: EmbeddedAppointment[];
 }
@@ -37,6 +38,9 @@ interface PatientWithAppointments extends Patient {
 export default function PatientDetailPage() {
   const params = useParams();
   const patientId = params.id as string;
+  
+  // Leemos el usuario logueado
+  const user = useAuthStore((state) => state.user);
   
   const [patient, setPatient] = useState<PatientWithAppointments | null>(null);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
@@ -91,21 +95,16 @@ export default function PatientDetailPage() {
 
   if (!patient) return <div className="p-8 text-slate-500">Cargando paciente...</div>;
 
-  // --- LÓGICA DE TURNOS ---
   const now = new Date();
   
-  // Próximos turnos (futuros y no cancelados)
   const upcomingAppointments = patient.appointments?.filter(app => 
     new Date(app.date) >= now && app.status !== 'CANCELLED'
   ) || [];
 
-  // Turnos pasados o cancelados
   const pastAppointments = patient.appointments?.filter(app => 
     new Date(app.date) < now || app.status === 'CANCELLED'
-  ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) || []; // Ordenados del más reciente al más antiguo
+  ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) || []; 
 
-
-  // Helper para el badge de estado
   const getStatusBadge = (status: string) => {
     switch(status) {
       case 'PENDING': return <span className="px-2 py-1 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded">Pendiente</span>;
@@ -120,7 +119,6 @@ export default function PatientDetailPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       
-      {/* Header del Paciente */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/patients" className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
@@ -147,59 +145,58 @@ export default function PatientDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Columna Izquierda */}
         <div className="lg:col-span-1 space-y-6">
           
-          {/* Caja 1: Nueva Evolución */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <div className="flex items-center gap-2 mb-4 text-blue-600">
-              <Stethoscope size={20} />
-              <h2 className="font-bold text-slate-800">Nueva Evolución</h2>
-            </div>
-            
-            <form onSubmit={handleAddNote} className="space-y-4">
-              <textarea
-                value={newNote}
-                onChange={(e) => setNewNote(e.target.value)}
-                className="w-full h-32 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                placeholder="Escriba los síntomas, diagnóstico o tratamiento indicado..."
-                required
-              />
-              
-              <div className="relative">
-                <input
-                  type="file"
-                  id="file-upload"
-                  onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)}
-                  className="hidden"
-                  accept=".pdf,image/*"
-                />
-                <label 
-                  htmlFor="file-upload"
-                  className="flex items-center gap-2 px-4 py-2 border border-dashed border-slate-300 rounded-lg text-sm text-slate-600 hover:bg-slate-50 cursor-pointer transition-colors"
-                >
-                  <Paperclip size={16} className="text-slate-400" />
-                  <span className="truncate">
-                    {selectedFile ? selectedFile.name : 'Adjuntar PDF o Imagen'}
-                  </span>
-                </label>
+          {/* BLOQUEO: Ocultamos el formulario si es Recepción */}
+          {user?.role !== 'RECEPCION' && (
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <div className="flex items-center gap-2 mb-4 text-blue-600">
+                <Stethoscope size={20} />
+                <h2 className="font-bold text-slate-800">Nueva Evolución</h2>
               </div>
+              
+              <form onSubmit={handleAddNote} className="space-y-4">
+                <textarea
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  className="w-full h-32 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                  placeholder="Escriba los síntomas, diagnóstico o tratamiento indicado..."
+                  required
+                />
+                
+                <div className="relative">
+                  <input
+                    type="file"
+                    id="file-upload"
+                    onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)}
+                    className="hidden"
+                    accept=".pdf,image/*"
+                  />
+                  <label 
+                    htmlFor="file-upload"
+                    className="flex items-center gap-2 px-4 py-2 border border-dashed border-slate-300 rounded-lg text-sm text-slate-600 hover:bg-slate-50 cursor-pointer transition-colors"
+                  >
+                    <Paperclip size={16} className="text-slate-400" />
+                    <span className="truncate">
+                      {selectedFile ? selectedFile.name : 'Adjuntar PDF o Imagen'}
+                    </span>
+                  </label>
+                </div>
 
-              <button
-                type="submit"
-                disabled={isSubmitting || !newNote.trim()}
-                className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-blue-400 flex items-center justify-center gap-2"
-              >
-                <Send size={18} />
-                {isSubmitting ? 'Guardando...' : 'Guardar Registro'}
-              </button>
-            </form>
-          </div>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !newNote.trim()}
+                  className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-blue-400 flex items-center justify-center gap-2"
+                >
+                  <Send size={18} />
+                  {isSubmitting ? 'Guardando...' : 'Guardar Registro'}
+                </button>
+              </form>
+            </div>
+          )}
 
-          {/* Caja 2: Resumen de Turnos */}
+          {/* Caja 2: Resumen de Turnos (Visible para todos) */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-6">
-            
-            {/* Próximos Turnos */}
             <div>
               <div className="flex items-center gap-2 mb-3 text-emerald-600">
                 <CalendarDays size={18} />
@@ -226,7 +223,6 @@ export default function PatientDetailPage() {
 
             <hr className="border-slate-100" />
 
-            {/* Historial de Turnos */}
             <div>
               <div className="flex items-center gap-2 mb-3 text-slate-500">
                 <History size={18} />
@@ -252,59 +248,66 @@ export default function PatientDetailPage() {
                 )}
               </div>
             </div>
-
           </div>
-
         </div>
 
-        {/* Columna Derecha: Historial Histórico (Sin cambios) */}
+        {/* Columna Derecha: Historial Clínico */}
         <div className="lg:col-span-2">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-              <Clock size={20} className="text-slate-400" />
-              Historial Clínico
-            </h2>
-
-            <div className="space-y-6">
-              {records.length === 0 ? (
-                <p className="text-slate-500 text-center py-8">Este paciente no tiene evoluciones registradas.</p>
-              ) : (
-                records.map((record) => (
-                  <div key={record.id} className="relative pl-6 border-l-2 border-slate-200 pb-2">
-                    <div className="absolute w-3 h-3 bg-blue-500 rounded-full -left-1.75 top-1.5 border-2 border-white"></div>
-                    <div className="mb-1 flex justify-between items-start">
-                      <p className="text-sm font-semibold text-slate-700">
-                        Atendido por {record.doctor.name}
-                      </p>
-                      <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
-                        {new Date(record.createdAt).toLocaleDateString('es-AR', {
-                          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                    <p className="text-slate-600 text-sm whitespace-pre-wrap mb-3">{record.notes}</p>
-                    
-                    {record.attachments && record.attachments.length > 0 && (
-                      <div className="flex gap-2">
-                        {record.attachments.map((url, index) => (
-                          <a 
-                            key={index}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md text-xs font-medium hover:bg-blue-100 transition-colors"
-                          >
-                            <FileIcon size={14} />
-                            Ver Estudio Adjunto
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
+          {/* BLOQUEO: Si es Recepción, mostramos un cartel de prohibido. Si no, la historia clínica. */}
+          {user?.role === 'RECEPCION' ? (
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-slate-400 min-h-100">
+              <Lock size={48} className="text-slate-300 mb-4" />
+              <p className="font-semibold text-lg text-slate-600">Acceso Restringido</p>
+              <p className="text-sm mt-1">La historia clínica es de uso exclusivo para profesionales médicos.</p>
             </div>
-          </div>
+          ) : (
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <h2 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <Clock size={20} className="text-slate-400" />
+                Historial Clínico
+              </h2>
+
+              <div className="space-y-6">
+                {records.length === 0 ? (
+                  <p className="text-slate-500 text-center py-8">Este paciente no tiene evoluciones registradas.</p>
+                ) : (
+                  records.map((record) => (
+                    <div key={record.id} className="relative pl-6 border-l-2 border-slate-200 pb-2">
+                      <div className="absolute w-3 h-3 bg-blue-500 rounded-full -left-1.75 top-1.5 border-2 border-white"></div>
+                      <div className="mb-1 flex justify-between items-start">
+                        <p className="text-sm font-semibold text-slate-700">
+                          Atendido por {record.doctor.name}
+                        </p>
+                        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
+                          {new Date(record.createdAt).toLocaleDateString('es-AR', {
+                            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 text-sm whitespace-pre-wrap mb-3">{record.notes}</p>
+                      
+                      {record.attachments && record.attachments.length > 0 && (
+                        <div className="flex gap-2">
+                          {record.attachments.map((url, index) => (
+                            <a 
+                              key={index}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md text-xs font-medium hover:bg-blue-100 transition-colors"
+                            >
+                              <FileIcon size={14} />
+                              Ver Estudio Adjunto
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
         
       </div>
@@ -314,7 +317,7 @@ export default function PatientDetailPage() {
         onClose={() => setIsAppointmentModalOpen(false)}
         onSuccess={() => {
           setIsAppointmentModalOpen(false);
-          loadData(); // Recargamos para que el turno nuevo aparezca en "Próximos Turnos"
+          loadData(); 
         }}
         preselectedPatientId={patient.id} 
       />

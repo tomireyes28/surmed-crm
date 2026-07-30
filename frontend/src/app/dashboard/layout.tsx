@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Cookies from 'js-cookie';
-// Importamos el icono UsersCog o BadgeInfo para el Staff. Usaré BadgeInfo (Shield también es buena opción).
 import { Users, Package, FileText, LogOut, Activity, Menu, Calendar, Shield } from 'lucide-react'; 
 import { useState, useEffect } from 'react';
 
@@ -32,22 +31,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/');
   };
 
+  // ACÁ ESTÁ LA MAGIA DEL DÍA 4: Definimos exactamente quién ve qué.
+  // Recepción ahora puede ver Inventario (para avisar si falta algo) y Facturación (para cobrar)
   const menuItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: Activity, allowedRoles: ['ADMIN', 'MEDICO'] },
+    { name: 'Dashboard', href: '/dashboard', icon: Activity, allowedRoles: ['ADMIN', 'MEDICO', 'RECEPCION'] },
     { name: 'Agenda', href: '/dashboard/appointments', icon: Calendar, allowedRoles: ['ADMIN', 'MEDICO', 'RECEPCION'] },
-    { name: 'Pacientes', href: '/dashboard/patients', icon: Users, allowedRoles: ['ADMIN', 'MEDICO'] },
-    // --- NUEVO ITEM: Staff ---
+    { name: 'Pacientes', href: '/dashboard/patients', icon: Users, allowedRoles: ['ADMIN', 'MEDICO', 'RECEPCION'] },
     { name: 'Staff', href: '/dashboard/staff', icon: Shield, allowedRoles: ['ADMIN'] }, 
-    { name: 'Inventario', href: '/dashboard/inventory', icon: Package, allowedRoles: ['ADMIN'] },
-    { name: 'Facturación', href: '/dashboard/invoices', icon: FileText, allowedRoles: ['ADMIN'] },
+    { name: 'Inventario', href: '/dashboard/inventory', icon: Package, allowedRoles: ['ADMIN', 'RECEPCION'] },
+    { name: 'Facturación', href: '/dashboard/invoices', icon: FileText, allowedRoles: ['ADMIN', 'RECEPCION'] },
   ];
 
-  // Filtramos los ítems
   const visibleMenuItems = menuItems.filter(item => 
     user && item.allowedRoles.includes(user.role)
   );
 
-  // Si no está montado, devolvemos un cascarón vacío para evitar errores de Next.js
   if (!isMounted) return null;
 
   return (
@@ -55,7 +53,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar */}
       <aside className={`bg-slate-900 text-white transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col`}>
         <div className="h-20 flex items-center justify-center border-b border-slate-800 py-3">
-          {/* Logo cuando el menú está abierto */}
           <div className={`${!isSidebarOpen ? 'hidden' : 'block'}`}>
             <Image 
               src="/logo.png" 
@@ -66,7 +63,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               priority 
             />
           </div>
-          {/* Icono colapsado cuando el menú está cerrado (Letra S verde) */}
           <h2 className={`font-bold text-xl text-emerald-500 transition-all ${isSidebarOpen && 'hidden'}`}>
             S
           </h2>
@@ -74,7 +70,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <nav className="flex-1 py-6 flex flex-col gap-2 px-3">
           {visibleMenuItems.map((item) => {
-            // FIX: Si es la raíz del dashboard, coincidencia exacta. Si no, permite sub-rutas.
             const isActive = item.href === '/dashboard' 
               ? pathname === '/dashboard' 
               : pathname === item.href || pathname.startsWith(`${item.href}/`);

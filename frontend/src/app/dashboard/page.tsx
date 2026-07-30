@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-// Modificá el import del servicio para traer las interfaces:
 import { 
   dashboardService, 
   DashboardAppointment, 
@@ -12,8 +11,13 @@ import {
   Plus, CheckCircle2, Clock, ArrowRight 
 } from 'lucide-react';
 import Link from 'next/link';
+// NUEVO: Importamos el store de Zustand (Ajustá la ruta si tu archivo se llama distinto)
+import { useAuthStore } from '@/store/authStore'; 
 
 export default function DashboardPage() {
+  // NUEVO: Obtenemos el usuario actual
+  const user = useAuthStore((state) => state.user); 
+  
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({ totalPatients: 0, monthlyRevenue: 0 });
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
@@ -23,7 +27,6 @@ export default function DashboardPage() {
     const fetchDashboardData = async () => {
       try {
         setIsLoading(true);
-        // Hacemos las 3 llamadas en paralelo para que cargue más rápido
         const [kpisData, appointmentsData, stockData] = await Promise.all([
           dashboardService.getKpis(),
           dashboardService.getTodayAppointments(),
@@ -43,12 +46,10 @@ export default function DashboardPage() {
     fetchDashboardData();
   }, []);
 
-  // Formateador de moneda argentina
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
   };
 
-  // Fecha actual formateada (Ej: Martes, 28 de Julio)
   const todayFormatted = new Intl.DateTimeFormat('es-AR', { 
     weekday: 'long', day: 'numeric', month: 'long' 
   }).format(new Date());
@@ -71,10 +72,14 @@ export default function DashboardPage() {
             <Calendar size={18} />
             Agendar Turno
           </Link>
-          <Link href="/dashboard/invoices/new" className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-sm">
-            <Plus size={18} />
-            Cobrar
-          </Link>
+          
+          {/* BLOQUEO POR ROL: Solo ADMIN puede cobrar desde acá */}
+          {user?.role === 'ADMIN' && (
+            <Link href="/dashboard/invoices/new" className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-sm">
+              <Plus size={18} />
+              Cobrar
+            </Link>
+          )}
         </div>
       </div>
 
@@ -104,17 +109,20 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between group hover:border-emerald-300 transition-colors">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-slate-500 text-sm font-medium">Ingresos del Mes</p>
-              <h3 className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(stats.monthlyRevenue)}</h3>
-            </div>
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
-              <TrendingUp size={24} />
+        {/* BLOQUEO POR ROL: Solo ADMIN ve la tarjeta de ingresos */}
+        {user?.role === 'ADMIN' && (
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between group hover:border-emerald-300 transition-colors">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-slate-500 text-sm font-medium">Ingresos del Mes</p>
+                <h3 className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(stats.monthlyRevenue)}</h3>
+              </div>
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
+                <TrendingUp size={24} />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className={`p-6 rounded-2xl border shadow-sm flex flex-col justify-between transition-colors ${lowStock.length > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
           <div className="flex justify-between items-start">
@@ -134,7 +142,7 @@ export default function DashboardPage() {
       {/* WIDGETS ROW (Agenda y Alertas) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* AGENDA DEL DÍA (Ocupa 2 columnas en desktop) */}
+        {/* AGENDA DEL DÍA */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -158,21 +166,16 @@ export default function DashboardPage() {
                 {appointments.map((apt) => (
                   <li key={apt.id} className="p-4 sm:px-6 hover:bg-slate-50 transition-colors flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
-                      {/* Hora */}
                       <div className="w-16 text-center">
                         <span className="block text-lg font-bold text-slate-800">
                           {new Date(apt.date).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      
-                      {/* Info Paciente y Médico */}
                       <div>
                         <p className="font-bold text-slate-800">{apt.patient.lastName}, {apt.patient.firstName}</p>
                         <p className="text-sm text-slate-500">Con {apt.doctor.name} • {apt.specialty.name}</p>
                       </div>
                     </div>
-
-                    {/* Estado Badge */}
                     <div>
                       {apt.status === 'PENDING' && <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">Pendiente</span>}
                       {apt.status === 'CONFIRMED' && <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">Confirmado</span>}
@@ -186,7 +189,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* INVENTARIO CRÍTICO (Ocupa 1 columna) */}
+        {/* INVENTARIO CRÍTICO */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -204,7 +207,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <ul className="divide-y divide-slate-100">
-                {lowStock.slice(0, 5).map((item) => ( // Mostramos máximo 5 para no romper el layout
+                {lowStock.slice(0, 5).map((item) => (
                   <li key={item.id} className="p-4 hover:bg-slate-50 transition-colors flex justify-between items-center">
                     <div>
                       <p className="font-semibold text-slate-800 text-sm">{item.name}</p>
