@@ -24,11 +24,34 @@ export class PatientsService {
     });
   }
 
-  async findAll() {
-    return await this.prisma.patient.findMany({
-      where: { isActive: true }, 
-      orderBy: { lastName: 'asc' }, 
-    });
+  // --- NUEVO: findAll con paginación ---
+  async findAll(page: number = 1, limit: number = 10) {
+    // Calculamos cuántos registros saltar
+    const skip = (page - 1) * limit;
+
+    // Ejecutamos ambas consultas al mismo tiempo para mayor velocidad
+    const [data, total] = await Promise.all([
+      this.prisma.patient.findMany({
+        where: { isActive: true }, 
+        orderBy: { lastName: 'asc' }, 
+        skip,
+        take: limit,
+      }),
+      this.prisma.patient.count({
+        where: { isActive: true },
+      })
+    ]);
+
+    // Devolvemos los datos junto con la información de paginación
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      }
+    };
   }
 
   async findOne(id: string) {
