@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Cookies from 'js-cookie';
-import { Users, Package, FileText, LogOut, Activity, Menu, Calendar, Shield } from 'lucide-react'; 
+import { Users, Package, FileText, LogOut, Activity, Menu, Calendar, Shield, Stethoscope } from 'lucide-react'; 
 import { useState, useEffect } from 'react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -40,6 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Staff', href: '/dashboard/staff', icon: Shield, allowedRoles: ['ADMIN'] }, 
     { name: 'Inventario', href: '/dashboard/inventory', icon: Package, allowedRoles: ['ADMIN', 'RECEPCION'] },
     { name: 'Facturación', href: '/dashboard/invoices', icon: FileText, allowedRoles: ['ADMIN', 'RECEPCION'] },
+    { name: 'Especialidades', href: '/dashboard/specialties', icon: Stethoscope, allowedRoles: ['ADMIN'] },
   ];
 
   const visibleMenuItems = menuItems.filter(item => 
