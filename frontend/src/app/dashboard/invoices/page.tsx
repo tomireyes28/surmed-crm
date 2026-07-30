@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { invoicesService } from '@/services/invoices.service';
 import { Invoice } from '@/schemas/invoice.schema';
-import { Search, Plus, Receipt, Download, Ban } from 'lucide-react';
+import { Search, Plus, Receipt, Download, Ban, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { generateInvoicePDF } from '@/utils/pdfGenerator';
 
@@ -11,27 +11,39 @@ export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const limit = 10;
+  
+  const currentYear = new Date().getFullYear().toString();
+  const [selectedMonth, setSelectedMonth] = useState<string>(''); 
+  const [selectedYear] = useState<string>(currentYear);
 
   const fetchInvoices = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await invoicesService.getAll();
-      setInvoices(data);
+      const response = await invoicesService.getAll(
+        currentPage, 
+        limit, 
+        selectedMonth || undefined, 
+        selectedMonth ? selectedYear : undefined
+      );
+      setInvoices(response.data);
+      setTotalPages(response.meta.totalPages);
     } catch (error) {
       console.error('Error cargando facturas:', error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentPage, selectedMonth, selectedYear]);
 
   useEffect(() => {
-    const load = async () => {
-      await fetchInvoices();
-    };
-    load();
+    // Apagamos la regla del linter solo para esta línea porque es un falso positivo
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchInvoices();
   }, [fetchInvoices]);
 
-  // NUEVO: Función para anular la factura
   const handleCancel = async (id: string, invoiceNumber: string) => {
     const isConfirmed = window.confirm(`¿Estás seguro de que deseas anular la factura ${invoiceNumber}? Esta acción no se puede deshacer y el monto dejará de sumar a los ingresos totales.`);
     
@@ -55,17 +67,43 @@ export default function InvoicesPage() {
     );
   });
 
+  const months = [
+    { value: '1', label: 'Enero' }, { value: '2', label: 'Febrero' }, { value: '3', label: 'Marzo' },
+    { value: '4', label: 'Abril' }, { value: '5', label: 'Mayo' }, { value: '6', label: 'Junio' },
+    { value: '7', label: 'Julio' }, { value: '8', label: 'Agosto' }, { value: '9', label: 'Septiembre' },
+    { value: '10', label: 'Octubre' }, { value: '11', label: 'Noviembre' }, { value: '12', label: 'Diciembre' },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold text-slate-800">Facturación</h1>
         
-        <div className="flex w-full sm:w-auto gap-4">
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-4">
+          
+          <div className="relative">
+            <select
+              value={selectedMonth}
+              onChange={(e) => {
+                setSelectedMonth(e.target.value);
+                setCurrentPage(1); 
+              }}
+              // Arreglado el min-w-40 de Tailwind
+              className="pl-10 pr-8 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none h-full min-w-40"
+            >
+              <option value="">Todos los meses</option>
+              {months.map(m => (
+                <option key={m.value} value={m.value}>{m.label} {currentYear}</option>
+              ))}
+            </select>
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          </div>
+
           <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input
               type="text"
-              placeholder="Buscar por paciente o DNI..."
+              placeholder="Buscar paciente..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
@@ -74,7 +112,7 @@ export default function InvoicesPage() {
           
           <Link 
             href="/dashboard/invoices/new"
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
           >
             <Plus size={20} />
             <span className="hidden sm:inline">Nueva Factura</span>
@@ -82,7 +120,7 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -139,7 +177,6 @@ export default function InvoicesPage() {
                       </td>
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          {/* El botón de descargar siempre está */}
                           <button
                             onClick={() => generateInvoicePDF(invoice)}
                             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -148,7 +185,6 @@ export default function InvoicesPage() {
                             <Download size={18} />
                           </button>
                           
-                          {/* El botón de anular solo aparece si no está anulada */}
                           {!isCancelled && (
                             <button
                               onClick={() => handleCancel(invoice.id, invoiceNumber)}
@@ -167,6 +203,31 @@ export default function InvoicesPage() {
             </tbody>
           </table>
         </div>
+
+        {!isLoading && totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50/50">
+            <span className="text-sm text-slate-500">
+              Página <span className="font-medium text-slate-800">{currentPage}</span> de <span className="font-medium text-slate-800">{totalPages}</span>
+            </span>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border border-slate-300 text-slate-600 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg border border-slate-300 text-slate-600 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

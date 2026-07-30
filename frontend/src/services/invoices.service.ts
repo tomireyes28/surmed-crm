@@ -1,9 +1,21 @@
 import { api } from './api';
 import { Invoice, InvoiceFormValues } from '../schemas/invoice.schema';
 
+export interface PaginatedInvoices {
+  data: Invoice[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
 export const invoicesService = {
-  getAll: async (): Promise<Invoice[]> => {
-    const { data } = await api.get('/invoices');
+  getAll: async (page: number = 1, limit: number = 10, month?: string, year?: string): Promise<PaginatedInvoices> => {
+    const { data } = await api.get('/invoices', {
+      params: { page, limit, month, year }
+    });
     return data;
   },
 

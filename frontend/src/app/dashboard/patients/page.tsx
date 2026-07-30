@@ -3,27 +3,23 @@
 import { useEffect, useState, useCallback } from 'react';
 import { patientsService } from '@/services/patients.service';
 import { Patient } from '@/schemas/patient.schema';
-// NUEVO: Importamos los Chevron para la paginación
 import { Search, Plus, FileText, Pencil, ArchiveX, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  // Inicia en true, así que la primera carga ya está cubierta
   const [isLoading, setIsLoading] = useState(true);
   
-  // NUEVO: Estados para la paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const limit = 10; // 10 pacientes por página
+  const limit = 10;
 
   const fetchPatients = useCallback(async () => {
     try {
-      setIsLoading(true);
-      // Le pasamos la página y el límite al servicio
       const response = await patientsService.getAll(currentPage, limit);
       
-      // Separamos la data de la metadata
       setPatients(response.data);
       setTotalPages(response.meta.totalPages);
     } catch (error) {
@@ -31,9 +27,10 @@ export default function PatientsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage]); // El hook depende de currentPage, si cambia, vuelve a llamar a la API
+  }, [currentPage]); 
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPatients();
   }, [fetchPatients]);
 
@@ -42,16 +39,18 @@ export default function PatientsPage() {
     
     if (isConfirmed) {
       try {
+        // Activamos el loading en el EVENTO, antes de llamar al backend
+        setIsLoading(true);
         await patientsService.archive(id);
         fetchPatients(); 
       } catch (error) {
         console.error('Error al archivar:', error);
         alert('Hubo un problema al archivar el paciente.');
+        setIsLoading(false); // Por si falla, lo apagamos
       }
     }
   };
 
-  // El buscador ahora filtra sobre la página actual visible
   const filteredPatients = patients.filter((p) => {
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -164,7 +163,6 @@ export default function PatientsPage() {
           </table>
         </div>
 
-        {/* NUEVO: Controles de Paginación */}
         {!isLoading && totalPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50/50">
             <span className="text-sm text-slate-500">
@@ -173,14 +171,22 @@ export default function PatientsPage() {
             
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                onClick={() => {
+                  // Activamos el loading en el EVENTO antes de que cambie la página
+                  setIsLoading(true);
+                  setCurrentPage(prev => Math.max(prev - 1, 1));
+                }}
                 disabled={currentPage === 1}
                 className="p-2 rounded-lg border border-slate-300 text-slate-600 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft size={18} />
               </button>
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                onClick={() => {
+                  // Activamos el loading en el EVENTO antes de que cambie la página
+                  setIsLoading(true);
+                  setCurrentPage(prev => Math.min(prev + 1, totalPages));
+                }}
                 disabled={currentPage === totalPages}
                 className="p-2 rounded-lg border border-slate-300 text-slate-600 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >

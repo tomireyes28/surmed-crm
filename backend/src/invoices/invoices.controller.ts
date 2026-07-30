@@ -19,8 +19,17 @@ export class InvoicesController {
   }
 
   @Get()
-  async findAll(@Query('patientId') patientId?: string) {
-    return await this.invoicesService.findAll(patientId);
+  async findAll(
+    @Query('patientId') patientId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+  ) {
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 10;
+    
+    return await this.invoicesService.findAll(patientId, pageNumber, limitNumber, month, year);
   }
 
   @Get(':id')

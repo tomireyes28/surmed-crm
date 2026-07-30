@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { Prisma } from '@prisma/client'; // <-- 1. IMPORTAMOS EL TIPADO DE PRISMA
 
 @Injectable()
 export class InvoicesService {
@@ -40,15 +41,53 @@ export class InvoicesService {
     });
   }
 
-  async findAll(patientId?: string) {
-    return await this.prisma.invoice.findMany({
-      where: patientId ? { patientId } : undefined,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        patient: { select: { id: true, firstName: true, lastName: true, documentId: true } },
-        items: true,
-      },
-    });
+  // Modificado con paginación y tipado estricto
+  async findAll(patientId?: string, page: number = 1, limit: number = 10, month?: string, year?: string) {
+    const skip = (page - 1) * limit;
+
+    // 2. CHAU 'any'. Tipamos el objeto con la interfaz exacta de Prisma
+    const whereClause: Prisma.InvoiceWhereInput = {};
+    
+    if (patientId) whereClause.patientId = patientId;
+
+    if (month && year) {
+      const monthNum = parseInt(month, 10);
+      const yearNum = parseInt(year, 10);
+      
+      const startDate = new Date(yearNum, monthNum - 1, 1);
+      const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
+      
+      whereClause.createdAt = {
+        gte: startDate,
+        lte: endDate,
+      };
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          patient: { select: { id: true, firstName: true, lastName: true, documentId: true } },
+          items: true,
+        },
+      }),
+      this.prisma.invoice.count({
+        where: whereClause,
+      })
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      }
+    };
   }
 
   async findOne(id: string) {
@@ -61,7 +100,6 @@ export class InvoicesService {
     });
   }
 
-  // --- NUEVO: Anulación de facturas ---
   async cancelInvoice(id: string) {
     const invoice = await this.prisma.invoice.findUnique({ where: { id } });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
