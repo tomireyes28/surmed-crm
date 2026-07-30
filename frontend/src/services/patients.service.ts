@@ -11,9 +11,23 @@ export interface UpdatePatientDto {
   birthDate?: string;
 }
 
+// NUEVO: Interfaz para la respuesta del backend
+export interface PaginatedPatients {
+  data: Patient[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
 export const patientsService = {
-  getAll: async (): Promise<Patient[]> => {
-    const { data } = await api.get('/patients');
+  // NUEVO: Agregamos parámetros por defecto (página 1, límite 10)
+  getAll: async (page: number = 1, limit: number = 10): Promise<PaginatedPatients> => {
+    const { data } = await api.get('/patients', {
+      params: { page, limit }
+    });
     return data;
   },
   
@@ -36,4 +50,4 @@ export const patientsService = {
     const { data } = await api.delete<Patient>(`/patients/${id}`);
     return data;
   } 
-}
+};

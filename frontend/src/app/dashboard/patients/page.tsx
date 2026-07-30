@@ -3,31 +3,38 @@
 import { useEffect, useState, useCallback } from 'react';
 import { patientsService } from '@/services/patients.service';
 import { Patient } from '@/schemas/patient.schema';
-import { Search, Plus, FileText, Pencil, ArchiveX } from 'lucide-react';
+// NUEVO: Importamos los Chevron para la paginación
+import { Search, Plus, FileText, Pencil, ArchiveX, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  
+  // NUEVO: Estados para la paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const limit = 10; // 10 pacientes por página
 
   const fetchPatients = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await patientsService.getAll();
-      setPatients(data);
+      // Le pasamos la página y el límite al servicio
+      const response = await patientsService.getAll(currentPage, limit);
+      
+      // Separamos la data de la metadata
+      setPatients(response.data);
+      setTotalPages(response.meta.totalPages);
     } catch (error) {
       console.error('Error cargando pacientes:', error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentPage]); // El hook depende de currentPage, si cambia, vuelve a llamar a la API
 
   useEffect(() => {
-    const load = async () => {
-      await fetchPatients();
-    };
-    load();
+    fetchPatients();
   }, [fetchPatients]);
 
   const handleArchive = async (id: string, name: string) => {
@@ -36,7 +43,7 @@ export default function PatientsPage() {
     if (isConfirmed) {
       try {
         await patientsService.archive(id);
-        fetchPatients(); // Recargamos la tabla para que desaparezca
+        fetchPatients(); 
       } catch (error) {
         console.error('Error al archivar:', error);
         alert('Hubo un problema al archivar el paciente.');
@@ -44,6 +51,7 @@ export default function PatientsPage() {
     }
   };
 
+  // El buscador ahora filtra sobre la página actual visible
   const filteredPatients = patients.filter((p) => {
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -63,7 +71,7 @@ export default function PatientsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input
               type="text"
-              placeholder="Buscar por nombre o DNI..."
+              placeholder="Buscar en esta página..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
@@ -72,7 +80,7 @@ export default function PatientsPage() {
           
           <Link 
             href="/dashboard/patients/new"
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
           >
             <Plus size={20} />
             Nuevo Paciente
@@ -80,7 +88,7 @@ export default function PatientsPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -124,7 +132,6 @@ export default function PatientsPage() {
                         {age} años
                       </td>
                       <td className="px-6 py-4 text-right">
-                        {/* NUEVO GRUPO DE ACCIONES */}
                         <div className="flex items-center justify-end gap-3 opacity-80 group-hover:opacity-100 transition-opacity">
                           <Link 
                             href={`/dashboard/patients/${patient.id}`}
@@ -156,6 +163,33 @@ export default function PatientsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* NUEVO: Controles de Paginación */}
+        {!isLoading && totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50/50">
+            <span className="text-sm text-slate-500">
+              Página <span className="font-medium text-slate-800">{currentPage}</span> de <span className="font-medium text-slate-800">{totalPages}</span>
+            </span>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border border-slate-300 text-slate-600 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg border border-slate-300 text-slate-600 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
