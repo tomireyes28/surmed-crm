@@ -3,11 +3,14 @@ import { InventoryService } from './inventory.service';
 import { CreateProductDto } from './dto/create-inventory.dto';
 import { StockMovementDto } from './dto/stock-movement.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard'; 
+import { Roles } from '../auth/decorators/roles.decorator'; 
 import type { RequestWithUser } from '../auth/interfaces/auth.interface';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Inventario')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard) 
+@Roles('ADMIN', 'RECEPCION') 
 @Controller('inventory')
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
