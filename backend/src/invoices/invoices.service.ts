@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -14,6 +15,7 @@ import {
   toMoneyNumber,
 } from '../common/utils/money.util';
 import { getClinicMonthBounds } from '../common/utils/timezone.util';
+import { AuditService } from '../audit/audit.service';
 
 type RawInvoiceWithRelations = {
   id: string;
@@ -47,7 +49,10 @@ type RawInvoiceWithRelations = {
 
 @Injectable()
 export class InvoicesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private auditService?: AuditService,
+  ) {}
 
   private serializeInvoice(invoice: RawInvoiceWithRelations) {
     return {
@@ -336,6 +341,17 @@ export class InvoicesService {
       },
     })) as unknown as RawInvoiceWithRelations;
 
+    await this.auditService?.record({
+      actorId,
+      action: 'INVOICE_PAY',
+      resource: 'Invoice',
+      resourceId: id,
+      patientId: invoice.patientId,
+      metadata: {
+        totalAmount: toMoneyNumber(updated.totalAmount),
+      },
+    });
+
     return this.serializeInvoice(updated);
   }
 
@@ -372,6 +388,19 @@ export class InvoicesService {
         items: true,
       },
     })) as unknown as RawInvoiceWithRelations;
+
+    await this.auditService?.record({
+      actorId,
+      action: 'INVOICE_CANCEL',
+      resource: 'Invoice',
+      resourceId: id,
+      patientId: invoice.patientId,
+      reason: reason?.trim() || undefined,
+      metadata: {
+        previousStatus: invoice.status,
+        totalAmount: toMoneyNumber(invoice.totalAmount),
+      },
+    });
 
     return this.serializeInvoice(updated);
   }

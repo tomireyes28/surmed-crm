@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Clock,
   ArrowRight,
+  RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
@@ -31,6 +32,8 @@ export default function DashboardPage() {
     user?.role === 'ADMIN' || user?.role === 'RECEPCION';
 
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [stats, setStats] = useState<{
     totalPatients: number;
     monthlyRevenue: number | null;
@@ -47,28 +50,47 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
 
-    const fetchDashboardData = async () => {
+    const loadDashboard = async () => {
       try {
-        setIsLoading(true);
         const [kpisData, appointmentsData, stockData] = await Promise.all([
           dashboardService.getKpis(),
           dashboardService.getTodayAppointments(),
-          canViewInventory ? dashboardService.getLowStock() : Promise.resolve([]),
+          canViewInventory
+            ? dashboardService.getLowStock()
+            : Promise.resolve([]),
         ]);
 
+        if (cancelled) return;
         setStats(kpisData);
         setAppointments(appointmentsData);
         setLowStock(stockData);
+        setLoadError(null);
       } catch (error) {
+        if (cancelled) return;
         console.error('Error cargando el dashboard:', error);
+        setLoadError(
+          'No se pudo obtener el estado operativo del servidor. Verifique la conexión antes de asumir que no hay actividad.',
+        );
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
-    void fetchDashboardData();
-  }, [user, canViewInventory]);
+    void loadDashboard();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, canViewInventory, reloadKey]);
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setLoadError(null);
+    setReloadKey((k) => k + 1);
+  };
 
   const todayFormatted = new Intl.DateTimeFormat(CLINIC_LOCALE, {
     timeZone: CLINIC_TIMEZONE,
@@ -87,6 +109,26 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {loadError && (
+        <div
+          role="alert"
+          className="p-4 bg-red-50 border border-red-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-red-700"
+        >
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={22} className="shrink-0" />
+            <p className="text-sm font-medium">{loadError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors flex items-center gap-2 self-start sm:self-auto"
+          >
+            <RefreshCw size={14} />
+            Reintentar conexión
+          </button>
+        </div>
+      )}
+
       {/* HEADER Y ACCIONES RÁPIDAS */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>

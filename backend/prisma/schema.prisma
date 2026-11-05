@@ -56,21 +56,71 @@ model Patient {
 }
 
 model MedicalRecord {
-  id          String   @id @default(uuid())
-  patientId   String
-  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  id              String              @id @default(uuid())
+  patientId       String
+  patient         Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
   
-  doctorId    String
-  doctor      User     @relation(fields: [doctorId], references: [id]) 
+  doctorId        String
+  doctor          User                @relation(fields: [doctorId], references: [id]) 
   
-  notes       String   @db.Text 
-  attachments String[] 
+  notes           String              @db.Text 
+  attachments     String[] 
   
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // Correcciones/aclaraciones por adenda sin sobrescribir evoluciones firmadas (T12)
+  parentRecordId  String?
+  parentRecord    MedicalRecord?      @relation("MedicalRecordAddenda", fields: [parentRecordId], references: [id])
+  addenda         MedicalRecord[]     @relation("MedicalRecordAddenda")
+
+  attachmentFiles MedicalAttachment[]
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@index([patientId, createdAt])
+  @@index([parentRecordId])
   @@map("medical_records")
+}
+
+model MedicalAttachment {
+  id              String        @id @default(uuid())
+  medicalRecordId String
+  medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+
+  patientId       String
+  uploadedById    String
+
+  storagePath     String        @unique
+  originalName    String
+  mimeType        String
+  sizeBytes       Int
+  sha256          String
+  scanStatus      String        @default("CLEAN_MAGIC_VERIFIED")
+  isRevoked       Boolean       @default(false)
+
+  createdAt       DateTime      @default(now())
+
+  @@index([patientId, createdAt])
+  @@index([medicalRecordId])
+  @@map("medical_attachments")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorId     String?
+  actorRole   String?
+  action      String
+  resource    String
+  resourceId  String?
+  patientId   String?
+  reason      String?
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([resource, resourceId, createdAt])
+  @@index([patientId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
 }
 
 enum ProductCategory {

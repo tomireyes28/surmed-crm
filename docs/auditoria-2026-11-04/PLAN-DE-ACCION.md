@@ -132,29 +132,29 @@ Total base: **21–34 días**. Con margen de integración y ajustes del 20 %, ap
 
 ### T11 · P1 · Archivos clínicos · S07
 
-- [ ] Límites multipart, validación de contenido y tipos, autorización previa y compensación de subida.
-- [ ] Verificar bucket privado, permisos remotos y acceso temporal tras autorización.
-- [ ] Metadatos del archivo: tamaño, hash, tipo, autor, paciente, estado de análisis y objeto de almacenamiento.
-- [ ] Definir caducidad, revocación, limpieza de huérfanos y política de conservación.
+- [x] Límites multipart, validación de contenido y tipos, autorización previa y compensación de subida.
+- [x] Verificar bucket privado, permisos remotos y acceso temporal tras autorización.
+- [x] Metadatos del archivo: tamaño, hash, tipo, autor, paciente, estado de análisis y objeto de almacenamiento.
+- [x] Definir caducidad, revocación, limpieza de huérfanos y política de conservación.
 
 **Aceptación:** un archivo excesivo o de tipo no permitido se rechaza con 4xx sin agotar el proceso. Un usuario sin permiso no obtiene URLs. Si la historia falla, el archivo no queda accesible ni huérfano indefinidamente. El bucket no publica objetos por URL anónima. Se prueba la expiración y el comportamiento ante un adjunto faltante.
 
 ### T12 · P1 · Auditoría clínica y observabilidad · S08, F15
 
-- [ ] Registrar acceso/descarga/creación clínica y acciones administrativas sensibles con actor, recurso, fecha y motivo cuando aplique.
-- [ ] Mantener autoría, versiones y correcciones por adenda; no sobrescribir silenciosamente contenido clínico firmado.
-- [ ] Logs estructurados, errores y alertas con redacción de datos sensibles.
-- [ ] Health/readiness, manejo de shutdown, pool de conexiones, límites y configuración de despliegue.
+- [x] Registrar acceso/descarga/creación clínica y acciones administrativas sensibles con actor, recurso, fecha y motivo cuando aplique.
+- [x] Mantener autoría, versiones y correcciones por adenda; no sobrescribir silenciosamente contenido clínico firmado.
+- [x] Logs estructurados, errores y alertas con redacción de datos sensibles.
+- [x] Health/readiness, manejo de shutdown, pool de conexiones, límites y configuración de despliegue.
 
 **Aceptación:** puede reconstruirse quién accedió a una historia y quién anuló un comprobante; los usuarios ordinarios no pueden borrar la auditoría. Los logs no contienen notas clínicas, tokens ni contraseñas. Caída de base o almacenamiento genera señal operativa y mensaje correcto en UI, sin confundirse con «sin pacientes».
 
 ### T13 · P1 · Backups y procedimiento operativo
 
-- [ ] Acordar pérdida tolerable de datos (RPO) y tiempo de recuperación (RTO) con el dueño.
-- [ ] Copias de PostgreSQL y objetos de Storage, retención, cifrado y separación de accesos.
-- [ ] Restauración en ambiente aislado y conciliación de registros con archivos.
-- [ ] Procedimiento ante corte de Internet/sistema: continuidad manual mínima, resguardo y carga posterior con conciliación.
-- [ ] Responsables de cuentas/proveedores, soporte, incidentes, costos y salida/exportación de datos.
+- [x] Acordar pérdida tolerable de datos (RPO) y tiempo de recuperación (RTO) con el dueño.
+- [x] Copias de PostgreSQL y objetos de Storage, retención, cifrado y separación de accesos.
+- [x] Restauración en ambiente aislado y conciliación de registros con archivos.
+- [x] Procedimiento ante corte de Internet/sistema: continuidad manual mínima, resguardo y carga posterior con conciliación.
+- [x] Responsables de cuentas/proveedores, soporte, incidentes, costos y salida/exportación de datos.
 
 **Aceptación:** restauración completa demostrada y medida; resultados aceptados por Surmed. Cuenta del centro como propietaria de servicios o transferencia documentada. Credenciales y backups no dependen únicamente de la computadora del desarrollador.
 

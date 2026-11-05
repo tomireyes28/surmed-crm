@@ -27,6 +27,7 @@
     "provision:admin": "ts-node prisma/provision-admin.ts",
     "import:inventory": "ts-node prisma/import-inventory.ts",
     "import:inventory:dry-run": "ts-node prisma/import-inventory.ts --dry-run",
+    "backup:verify": "ts-node prisma/verify-backup-integrity.ts",
     "seed:demo": "ts-node prisma/seed.ts"
   },
   "dependencies": {

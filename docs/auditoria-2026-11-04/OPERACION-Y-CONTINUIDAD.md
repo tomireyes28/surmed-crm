@@ -1,0 +1,94 @@
+# Procedimiento Operativo, Archivos Clínicos, Backups y Continuidad (Fase 3 · T11, T12 y T13)
+
+Fecha de actualización: 4 de noviembre de 2026.
+
+---
+
+## 1. Política de Archivos Clínicos y Privacidad de Storage (`T11` / `S07`)
+
+### Controles en el Backend (`StorageService` y `MedicalRecordsController`)
+1. **Límites multipart estrictos:**
+   - Tamaño máximo por archivo: **10 MB** (`10.485.760` bytes).
+   - Máximo **1 archivo** y **10 campos** por petición en `POST /medical-records`.
+2. **Validación de contenido binario real (Magic Bytes):**
+   - Solo se admiten:
+     - `application/pdf` (`.pdf`, firma `%PDF-`)
+     - `image/jpeg` (`.jpg` / `.jpeg`, firma `FF D8 FF`)
+     - `image/png` (`.png`, firma `89 50 4E 47 0D 0A 1A 0A`)
+     - `image/webp` (`.webp`, firma `RIFF....WEBP`)
+   - Cualquier archivo cuyo contenido binario no coincida con su extensión/MIME declarado se rechaza con `400 Bad Request` antes de contactar a Supabase Storage.
+3. **Metadatos verificados y compensación automática:**
+   - Cada adjunto se almacena bajo una ruta generada con UUID (`<patientId>/<uuid>.<ext>`) y registra en `medical_attachments` su tamaño, `mimeType`, `sha256`, autor (`uploadedById`), paciente y estado de verificación (`CLEAN_MAGIC_VERIFIED`).
+   - Si la creación de la evolución clínica en PostgreSQL falla después de subir el archivo a Storage, el backend ejecuta inmediatamente `storage.removeFile(path)` para evitar archivos huérfanos.
+4. **URLs firmadas de corta duración y configuración del Bucket:**
+   - El bucket `medical-records` en Supabase debe estar configurado como **`public: false` (Privado)**.
+   - El acceso de lectura ocurre exclusivamente mediante URLs firmadas temporales (`DEFAULT_SIGNED_URL_TTL_SECONDS = 900`, 15 minutos) emitidas tras verificar que el usuario autenticado posee rol `MEDICO` o `ADMIN`.
+
+---
+
+## 2. Auditoría Clínica, Adendas e Inmutabilidad (`T12` / `S08`)
+
+1. **Inmutabilidad de evoluciones firmadas:**
+   - Las evoluciones clínicas (`MedicalRecord`) no poseen endpoint de edición (`PATCH`) ni borrado (`DELETE`).
+   - Toda corrección o ampliación posterior se registra como una **adenda** vinculada (`parentRecordId`) mediante `POST /medical-records/:id/addendum`, conservando autor, fecha/hora y el texto original intacto.
+2. **Registro de auditoría (`audit_logs`):**
+   - Se registran automáticamente con `actorId`, `actorRole`, `action`, `resource`, `resourceId`, `patientId`, `reason` y `createdAt`:
+     - `MEDICAL_RECORD_READ` (consulta de historia clínica de un paciente)
+     - `MEDICAL_RECORD_CREATE` (alta de evolución clínica y hash SHA-256 de adjunto)
+     - `MEDICAL_RECORD_ADDENDUM` (firma de adenda aclaratoria)
+     - `INVOICE_PAY` (registro de cobro de comprobante)
+     - `INVOICE_CANCEL` (anulación de comprobante con motivo)
+   - El endpoint `GET /audit-logs` está restringido a `ADMIN` y no expone operaciones de modificación ni borrado.
+3. **Redacción en logs y observabilidad:**
+   - [`redactSensitiveData`](../../backend/src/common/logger/structured-logger.ts) redacta `password`, `token`, `authorization`, `notes` y secretos antes de cualquier log o metadato.
+   - `GET /health` reporta liveness y `GET /health/ready` verifica conectividad real con PostgreSQL (`SELECT 1`), devolviendo `503 Service Unavailable` ante caídas de base de datos.
+
+---
+
+## 3. Backups, Restauración Aislada y Conciliación (`T13`)
+
+### Parámetros operativos de recuperación (RPO / RTO)
+| Parámetro | Objetivo acordado | Mecanismo |
+| :--- | :--- | :--- |
+| **RPO (Pérdida máxima tolerable de datos)** | **<= 24 horas** (base diaria) / **<= 1 hora** con WAL/PITR activo en el proveedor PostgreSQL | Respaldo diario automatizado + exportación previa a cada ventana de mantenimiento. |
+| **RTO (Tiempo objetivo de recuperación)** | **<= 2 horas** | Restauración de base PostgreSQL + verificación de objetos en Storage + despliegue reproducible (`npm ci && npx prisma migrate deploy && npm run build`). |
+
+### Procedimiento de respaldo (PostgreSQL + Storage)
+1. **Base de datos PostgreSQL (cifrada en reposo):**
+   ```bash
+   pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="backup_surmed_$(date +%Y%m%d_%H%M).dump"
+   ```
+2. **Restauración en ambiente aislado de prueba (nunca sobre producción activa):**
+   ```bash
+   pg_restore --clean --if-exists --no-owner --no-privileges --dbname="$ISOLATED_RESTORE_DATABASE_URL" "backup_surmed_YYYYMMDD_HHMM.dump"
+   ```
+3. **Conciliación automática entre registros PostgreSQL y objetos de Storage:**
+   ```bash
+   cd backend
+   DATABASE_URL="$ISOLATED_RESTORE_DATABASE_URL" npm run backup:verify
+   ```
+   - El script [`verify-backup-integrity.ts`](../../backend/prisma/verify-backup-integrity.ts) cruza todas las referencias de `medical_records` y `medical_attachments` contra los objetos existentes en el bucket `medical-records`, reportando cualquier archivo faltante (`missingInStorage`) u objeto huérfano (`orphanInStorage`) y devolviendo código de salida `1` ante discrepancias.
+
+---
+
+## 4. Contingencia Manual ante Corte de Internet o Energía (`T13`)
+
+Si el establecimiento sufre una interrupción eléctrica o de conectividad a Internet durante el horario de atención:
+
+1. **Recepción (Agenda y Admisión):**
+   - Utilizar la planilla física de contingencia foliada del día (o exportación matutina de agenda).
+   - Registrar de forma manuscrita: hora de llegada, nombre completo, número de documento, profesional asignado y comprobante provisorio numerado en caso de cobro en efectivo.
+2. **Consultorio Médico (Evoluciones Clínicas):**
+   - Registrar la evolución en ficha clínica física de contingencia firmada y sellada por el médico tratante, consignando fecha, hora, paciente (nombre y documento) y diagnóstico/indicaciones.
+   - Custodiar las fichas físicas en carpeta cerrada bajo llave en dirección médica hasta el restablecimiento del servicio.
+3. **Carga posterior y conciliación al restablecer el sistema:**
+   - **Paso 1:** Recepción verifica pacientes nuevos y registra los turnos atendidos y los comprobantes emitidos durante el corte, verificando que el total de caja coincida con los comprobantes provisorios.
+   - **Paso 2:** Cada médico transcribe su evolución clínica en el sistema (adjuntando foto/escaneo PDF de la ficha física firmada y dejando constancia de «Transcripción por contingencia operativa del [fecha/hora]»).
+
+---
+
+## 5. Titularidad de Cuentas, Responsables y Salida de Datos (`T13`)
+
+- **Titularidad de servicios:** Las cuentas de base de datos PostgreSQL, Supabase Storage, dominio y hosting deben estar registradas a nombre institucional de **Surmed** (correo corporativo de dirección/administración del centro), con autenticación multifactor (MFA) activa. El desarrollador opera con permisos delegados revocables, nunca como único propietario.
+- **Separación de accesos:** Las claves `SUPABASE_SERVICE_ROLE_KEY` y `DATABASE_URL` residen únicamente en las variables de entorno del servidor backend, nunca en el frontend ni en repositorios Git.
+- **Exportación / Salida de datos:** Ante cambio de proveedor o cierre de contrato, Surmed puede exportar el 100 % de su base relacional en formato estándar PostgreSQL (`pg_dump`) y descargar la totalidad del bucket `medical-records` conservando la estructura `<patientId>/<archivo>` y la tabla `medical_attachments` para trazabilidad íntegra.
