@@ -1,37 +1,42 @@
 import { Injectable } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  async getStats() {
-    // 1. Calculamos el primer día del mes actual para la facturación
-    const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-
-    // 2. Pacientes totales activos
+  async getStats(role?: Role) {
     const totalPatients = await this.prisma.patient.count({
       where: { isActive: true },
     });
 
-    // 3. Facturación del mes (excluyendo las CANCELLED que hicimos en la Fase 4)
+    // Solo ADMIN tiene permiso para recibir información financiera / ingresos mensuales (S08 / T02)
+    if (role !== 'ADMIN') {
+      return { totalPatients, monthlyRevenue: null };
+    }
+
+    const today = new Date();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
     const currentMonthInvoices = await this.prisma.invoice.findMany({
       where: {
         createdAt: { gte: firstDayOfMonth },
         status: { not: 'CANCELLED' },
       },
     });
-    const monthlyRevenue = currentMonthInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const monthlyRevenue = currentMonthInvoices.reduce(
+      (sum, inv) => sum + inv.totalAmount,
+      0,
+    );
 
     return { totalPatients, monthlyRevenue };
   }
 
   async getTodayAppointments() {
-    // Rango de fechas: Desde las 00:00:00 de hoy hasta las 23:59:59
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    
+
     const todayEnd = new Date(todayStart);
     todayEnd.setDate(todayEnd.getDate() + 1);
 
@@ -55,8 +60,7 @@ export class DashboardService {
     const products = await this.prisma.product.findMany({
       where: { isActive: true },
     });
-    
-    // Filtramos los que están por debajo o igual a su stock mínimo
-    return products.filter(p => p.quantity <= p.minStock);
+
+    return products.filter((p) => p.quantity <= p.minStock);
   }
 }

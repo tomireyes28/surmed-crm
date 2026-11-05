@@ -6,11 +6,20 @@ import { patientsService } from '@/services/patients.service';
 import { medicalRecordsService } from '@/services/medicalRecords.service';
 import { Patient } from '@/schemas/patient.schema';
 import Link from 'next/link';
-// Sumamos el ícono Lock para el mensaje de restricción
-import { ArrowLeft, Stethoscope, Clock, Send, Paperclip, FileText as FileIcon, CalendarPlus, CalendarDays, History, Lock } from 'lucide-react';
+import {
+  ArrowLeft,
+  Stethoscope,
+  Clock,
+  Send,
+  Paperclip,
+  FileText as FileIcon,
+  CalendarPlus,
+  CalendarDays,
+  History,
+  Lock,
+} from 'lucide-react';
 import { NewAppointmentModal } from '../../appointments/components/NewAppointmentModal';
-// Importamos el store de sesión
-import { useAuthStore } from '@/store/authStore'; 
+import { useAuthStore } from '@/store/authStore';
 
 interface MedicalRecord {
   id: string;
@@ -38,50 +47,60 @@ interface PatientWithAppointments extends Patient {
 export default function PatientDetailPage() {
   const params = useParams();
   const patientId = params.id as string;
-  
-  // Leemos el usuario logueado
+
   const user = useAuthStore((state) => state.user);
-  
+  const canReadClinicalHistory =
+    user?.role === 'MEDICO' || user?.role === 'ADMIN';
+  const canCreateClinicalEvolution = user?.role === 'MEDICO';
+
   const [patient, setPatient] = useState<PatientWithAppointments | null>(null);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
-  
+
   const [newNote, setNewNote] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
       const patientData = await patientsService.getById(patientId);
       setPatient(patientData);
-      
-      const recordsData = await medicalRecordsService.getByPatientId(patientId);
-      setRecords(recordsData);
+
+      // No solicitar datos clínicos desde una sesión sin permiso (S03 / T02)
+      if (canReadClinicalHistory) {
+        const recordsData = await medicalRecordsService.getByPatientId(patientId);
+        setRecords(recordsData);
+      } else {
+        setRecords([]);
+      }
     } catch (error) {
       console.error('Error cargando el historial:', error);
     }
-  }, [patientId]);
+  }, [patientId, canReadClinicalHistory]);
 
   useEffect(() => {
+    if (!user) return;
     const fetchInitialData = async () => {
       await loadData();
     };
-    fetchInitialData();
-  }, [loadData]);
+    void fetchInitialData();
+  }, [user, loadData]);
 
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNote.trim()) return;
+    if (!newNote.trim() || !canCreateClinicalEvolution) return;
 
     setIsSubmitting(true);
     try {
       await medicalRecordsService.create(patientId, newNote, selectedFile);
-      
+
       setNewNote('');
-      setSelectedFile(null); 
-      
-      const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+      setSelectedFile(null);
+
+      const fileInput = document.getElementById(
+        'file-upload',
+      ) as HTMLInputElement;
       if (fileInput) fileInput.value = '';
 
       await loadData();
@@ -93,35 +112,69 @@ export default function PatientDetailPage() {
     }
   };
 
-  if (!patient) return <div className="p-8 text-slate-500">Cargando paciente...</div>;
+  if (!patient) {
+    return <div className="p-8 text-slate-500">Cargando paciente...</div>;
+  }
 
   const now = new Date();
-  
-  const upcomingAppointments = patient.appointments?.filter(app => 
-    new Date(app.date) >= now && app.status !== 'CANCELLED'
-  ) || [];
 
-  const pastAppointments = patient.appointments?.filter(app => 
-    new Date(app.date) < now || app.status === 'CANCELLED'
-  ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) || []; 
+  const upcomingAppointments =
+    patient.appointments?.filter(
+      (app) => new Date(app.date) >= now && app.status !== 'CANCELLED',
+    ) || [];
+
+  const pastAppointments =
+    patient.appointments
+      ?.filter((app) => new Date(app.date) < now || app.status === 'CANCELLED')
+      .sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      ) || [];
 
   const getStatusBadge = (status: string) => {
-    switch(status) {
-      case 'PENDING': return <span className="px-2 py-1 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded">Pendiente</span>;
-      case 'CONFIRMED': return <span className="px-2 py-1 text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded">Confirmado</span>;
-      case 'IN_WAITING_ROOM': return <span className="px-2 py-1 text-[10px] font-semibold bg-amber-100 text-amber-700 rounded">En Espera</span>;
-      case 'ATTENDED': return <span className="px-2 py-1 text-[10px] font-semibold bg-purple-100 text-purple-700 rounded">Atendido</span>;
-      case 'CANCELLED': return <span className="px-2 py-1 text-[10px] font-semibold bg-red-100 text-red-700 rounded">Cancelado</span>;
-      default: return null;
+    switch (status) {
+      case 'PENDING':
+        return (
+          <span className="px-2 py-1 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded">
+            Pendiente
+          </span>
+        );
+      case 'CONFIRMED':
+        return (
+          <span className="px-2 py-1 text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded">
+            Confirmado
+          </span>
+        );
+      case 'IN_WAITING_ROOM':
+        return (
+          <span className="px-2 py-1 text-[10px] font-semibold bg-amber-100 text-amber-700 rounded">
+            En Espera
+          </span>
+        );
+      case 'ATTENDED':
+        return (
+          <span className="px-2 py-1 text-[10px] font-semibold bg-purple-100 text-purple-700 rounded">
+            Atendido
+          </span>
+        );
+      case 'CANCELLED':
+        return (
+          <span className="px-2 py-1 text-[10px] font-semibold bg-red-100 text-red-700 rounded">
+            Cancelado
+          </span>
+        );
+      default:
+        return null;
     }
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/patients" className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+          <Link
+            href="/dashboard/patients"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+          >
             <ArrowLeft size={24} />
           </Link>
           <div>
@@ -129,12 +182,15 @@ export default function PatientDetailPage() {
               {patient.lastName}, {patient.firstName}
             </h1>
             <p className="text-slate-500 text-sm mt-1">
-              DNI: {patient.documentId} | Edad: {new Date().getFullYear() - new Date(patient.birthDate).getFullYear()} años
+              DNI: {patient.documentId} | Edad:{' '}
+              {new Date().getFullYear() -
+                new Date(patient.birthDate).getFullYear()}{' '}
+              años
             </p>
           </div>
         </div>
-        
-        <button 
+
+        <button
           onClick={() => setIsAppointmentModalOpen(true)}
           className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
         >
@@ -144,17 +200,15 @@ export default function PatientDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
         <div className="lg:col-span-1 space-y-6">
-          
-          {/* BLOQUEO: Ocultamos el formulario si es Recepción */}
-          {user?.role !== 'RECEPCION' && (
+          {/* Solo MEDICO puede crear evoluciones clínicas (T02 / S03) */}
+          {canCreateClinicalEvolution && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <div className="flex items-center gap-2 mb-4 text-blue-600">
                 <Stethoscope size={20} />
                 <h2 className="font-bold text-slate-800">Nueva Evolución</h2>
               </div>
-              
+
               <form onSubmit={handleAddNote} className="space-y-4">
                 <textarea
                   value={newNote}
@@ -163,22 +217,28 @@ export default function PatientDetailPage() {
                   placeholder="Escriba los síntomas, diagnóstico o tratamiento indicado..."
                   required
                 />
-                
+
                 <div className="relative">
                   <input
                     type="file"
                     id="file-upload"
-                    onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)}
+                    onChange={(e) =>
+                      setSelectedFile(
+                        e.target.files ? e.target.files[0] : null,
+                      )
+                    }
                     className="hidden"
                     accept=".pdf,image/*"
                   />
-                  <label 
+                  <label
                     htmlFor="file-upload"
                     className="flex items-center gap-2 px-4 py-2 border border-dashed border-slate-300 rounded-lg text-sm text-slate-600 hover:bg-slate-50 cursor-pointer transition-colors"
                   >
                     <Paperclip size={16} className="text-slate-400" />
                     <span className="truncate">
-                      {selectedFile ? selectedFile.name : 'Adjuntar PDF o Imagen'}
+                      {selectedFile
+                        ? selectedFile.name
+                        : 'Adjuntar PDF o Imagen'}
                     </span>
                   </label>
                 </div>
@@ -200,21 +260,36 @@ export default function PatientDetailPage() {
             <div>
               <div className="flex items-center gap-2 mb-3 text-emerald-600">
                 <CalendarDays size={18} />
-                <h3 className="font-bold text-slate-800 text-sm">Próximos Turnos</h3>
+                <h3 className="font-bold text-slate-800 text-sm">
+                  Próximos Turnos
+                </h3>
               </div>
               <div className="space-y-3">
                 {upcomingAppointments.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">No hay turnos futuros programados.</p>
+                  <p className="text-xs text-slate-500 italic">
+                    No hay turnos futuros programados.
+                  </p>
                 ) : (
-                  upcomingAppointments.map(app => (
-                    <div key={app.id} className="p-3 border border-slate-100 bg-slate-50 rounded-lg">
+                  upcomingAppointments.map((app) => (
+                    <div
+                      key={app.id}
+                      className="p-3 border border-slate-100 bg-slate-50 rounded-lg"
+                    >
                       <div className="flex justify-between items-start mb-1">
                         <span className="text-xs font-semibold text-slate-800">
-                          {new Date(app.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} hs
+                          {new Date(app.date).toLocaleDateString('es-AR', {
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}{' '}
+                          hs
                         </span>
                         {getStatusBadge(app.status)}
                       </div>
-                      <p className="text-xs text-slate-600 truncate">{app.specialty.name} - {app.doctor.name}</p>
+                      <p className="text-xs text-slate-600 truncate">
+                        {app.specialty.name} - {app.doctor.name}
+                      </p>
                     </div>
                   ))
                 )}
@@ -226,23 +301,35 @@ export default function PatientDetailPage() {
             <div>
               <div className="flex items-center gap-2 mb-3 text-slate-500">
                 <History size={18} />
-                <h3 className="font-bold text-slate-800 text-sm">Últimos Turnos Pasados</h3>
+                <h3 className="font-bold text-slate-800 text-sm">
+                  Últimos Turnos Pasados
+                </h3>
               </div>
               <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                 {pastAppointments.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">No registra turnos previos.</p>
+                  <p className="text-xs text-slate-500 italic">
+                    No registra turnos previos.
+                  </p>
                 ) : (
-                  pastAppointments.map(app => (
-                    <div key={app.id} className="p-2 border-b border-slate-100 last:border-0 flex justify-between items-center">
+                  pastAppointments.map((app) => (
+                    <div
+                      key={app.id}
+                      className="p-2 border-b border-slate-100 last:border-0 flex justify-between items-center"
+                    >
                       <div>
-                        <p className="text-xs font-medium text-slate-700">{app.specialty.name}</p>
+                        <p className="text-xs font-medium text-slate-700">
+                          {app.specialty.name}
+                        </p>
                         <p className="text-[10px] text-slate-400">
-                           {new Date(app.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })} - {app.doctor.name}
+                          {new Date(app.date).toLocaleDateString('es-AR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: '2-digit',
+                          })}{' '}
+                          - {app.doctor.name}
                         </p>
                       </div>
-                      <div>
-                         {getStatusBadge(app.status)}
-                      </div>
+                      <div>{getStatusBadge(app.status)}</div>
                     </div>
                   ))
                 )}
@@ -253,12 +340,16 @@ export default function PatientDetailPage() {
 
         {/* Columna Derecha: Historial Clínico */}
         <div className="lg:col-span-2">
-          {/* BLOQUEO: Si es Recepción, mostramos un cartel de prohibido. Si no, la historia clínica. */}
-          {user?.role === 'RECEPCION' ? (
+          {!canReadClinicalHistory ? (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-slate-400 min-h-100">
               <Lock size={48} className="text-slate-300 mb-4" />
-              <p className="font-semibold text-lg text-slate-600">Acceso Restringido</p>
-              <p className="text-sm mt-1">La historia clínica es de uso exclusivo para profesionales médicos.</p>
+              <p className="font-semibold text-lg text-slate-600">
+                Acceso Restringido
+              </p>
+              <p className="text-sm mt-1">
+                La historia clínica es de uso exclusivo para profesionales
+                autorizados.
+              </p>
             </div>
           ) : (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -269,27 +360,41 @@ export default function PatientDetailPage() {
 
               <div className="space-y-6">
                 {records.length === 0 ? (
-                  <p className="text-slate-500 text-center py-8">Este paciente no tiene evoluciones registradas.</p>
+                  <p className="text-slate-500 text-center py-8">
+                    Este paciente no tiene evoluciones registradas.
+                  </p>
                 ) : (
                   records.map((record) => (
-                    <div key={record.id} className="relative pl-6 border-l-2 border-slate-200 pb-2">
+                    <div
+                      key={record.id}
+                      className="relative pl-6 border-l-2 border-slate-200 pb-2"
+                    >
                       <div className="absolute w-3 h-3 bg-blue-500 rounded-full -left-1.75 top-1.5 border-2 border-white"></div>
                       <div className="mb-1 flex justify-between items-start">
                         <p className="text-sm font-semibold text-slate-700">
                           Atendido por {record.doctor.name}
                         </p>
                         <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
-                          {new Date(record.createdAt).toLocaleDateString('es-AR', {
-                            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                          })}
+                          {new Date(record.createdAt).toLocaleDateString(
+                            'es-AR',
+                            {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            },
+                          )}
                         </span>
                       </div>
-                      <p className="text-slate-600 text-sm whitespace-pre-wrap mb-3">{record.notes}</p>
-                      
+                      <p className="text-slate-600 text-sm whitespace-pre-wrap mb-3">
+                        {record.notes}
+                      </p>
+
                       {record.attachments && record.attachments.length > 0 && (
                         <div className="flex gap-2">
                           {record.attachments.map((url, index) => (
-                            <a 
+                            <a
                               key={index}
                               href={url}
                               target="_blank"
@@ -309,17 +414,16 @@ export default function PatientDetailPage() {
             </div>
           )}
         </div>
-        
       </div>
 
-      <NewAppointmentModal 
+      <NewAppointmentModal
         isOpen={isAppointmentModalOpen}
         onClose={() => setIsAppointmentModalOpen(false)}
         onSuccess={() => {
           setIsAppointmentModalOpen(false);
-          loadData(); 
+          void loadData();
         }}
-        preselectedPatientId={patient.id} 
+        preselectedPatientId={patient.id}
       />
     </div>
   );

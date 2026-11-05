@@ -1,30 +1,58 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Optional, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../prisma/prisma.service';
-
 import { JwtPayload } from './interfaces/auth.interface';
+import { TokenRevocationService } from './token-revocation.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+    @Optional() private tokenRevocationService?: TokenRevocationService,
+  ) {
+    const secret = configService.getOrThrow<string>('JWT_SECRET');
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'SUPER_SECRET_KEY_SURMED',
+      secretOrKey: secret,
     });
   }
 
-  // Reemplazamos 'any' por nuestra interfaz 'JwtPayload'
   async validate(payload: JwtPayload) {
+    if (
+      this.tokenRevocationService?.isRevoked(
+        payload.jti,
+        payload.sub,
+        payload.iat,
+      )
+    ) {
+      throw new UnauthorizedException('Sesión revocada o expirada');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+      },
     });
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Usuario no válido o inactivo');
     }
 
-    return { id: user.id, email: user.email, role: user.role };
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      jti: payload.jti,
+    };
   }
 }

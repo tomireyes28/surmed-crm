@@ -1,33 +1,48 @@
-import { Controller, Post, Body, UseInterceptors, UploadedFile, UseGuards, Request, Get, Param } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Request,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { MedicalRecordsService } from './medical-records.service';
 import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import type { RequestWithUser } from '../auth/interfaces/auth.interface';
 import 'multer';
-import { ApiTags } from '@nestjs/swagger';
-
-
 
 @ApiTags('Historias Clínicas')
-@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('medical-records')
 export class MedicalRecordsController {
   constructor(private readonly medicalRecordsService: MedicalRecordsService) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('file')) // Atrapa el archivo si viene en el campo 'file'
+  @Roles('MEDICO')
+  @UseInterceptors(FileInterceptor('file'))
   create(
     @Body() createMedicalRecordDto: CreateMedicalRecordDto,
     @Request() req: RequestWithUser,
-    @UploadedFile() file?: Express.Multer.File, // El archivo es opcional
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    // req.user existe gracias al JWT
-    return this.medicalRecordsService.create(createMedicalRecordDto, req.user!.id, file);
+    return this.medicalRecordsService.create(
+      createMedicalRecordDto,
+      req.user!.id,
+      file,
+    );
   }
 
-  // Endpoint para traer toda la historia clínica de un paciente específico
   @Get('patient/:patientId')
+  @Roles('MEDICO', 'ADMIN')
   findByPatient(@Param('patientId') patientId: string) {
     return this.medicalRecordsService.findByPatient(patientId);
   }

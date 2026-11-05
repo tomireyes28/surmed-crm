@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
@@ -11,10 +11,22 @@ export class MedicalRecordsService {
     private storage: StorageService,
   ) {}
 
-  async create(dto: CreateMedicalRecordDto, doctorId: string, file?: Express.Multer.File) {
+  async create(
+    dto: CreateMedicalRecordDto,
+    doctorId: string,
+    file?: Express.Multer.File,
+  ) {
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: dto.patientId },
+      select: { id: true, isActive: true },
+    });
+
+    if (!patient || !patient.isActive) {
+      throw new NotFoundException('Paciente no encontrado o inactivo');
+    }
+
     let attachmentPath: string | null = null;
 
-    // Si el médico adjuntó una radiografía o PDF, lo subimos a Supabase
     if (file) {
       attachmentPath = await this.storage.uploadFile(file, dto.patientId);
     }
@@ -22,32 +34,45 @@ export class MedicalRecordsService {
     return this.prisma.medicalRecord.create({
       data: {
         patientId: dto.patientId,
-        doctorId: doctorId, // El ID viene del JWT del usuario logueado
+        doctorId: doctorId,
         notes: dto.notes,
         attachments: attachmentPath ? [attachmentPath] : [],
+      },
+      include: {
+        doctor: {
+          select: { id: true, name: true, email: true },
+        },
       },
     });
   }
 
   async findByPatient(patientId: string) {
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { id: true },
+    });
+
+    if (!patient) {
+      throw new NotFoundException('Paciente no encontrado');
+    }
+
     const records = await this.prisma.medicalRecord.findMany({
       where: { patientId },
       orderBy: { createdAt: 'desc' },
       include: {
         doctor: {
-          select: { name: true, email: true }, // Solo traemos el nombre del médico, no su contraseña
+          select: { id: true, name: true, email: true },
         },
       },
     });
 
-    // Si hay archivos adjuntos, convertimos sus rutas internas en URLs temporales legibles
     return Promise.all(
       records.map(async (record) => {
         const signedAttachments = await Promise.all(
-          record.attachments.map((path) => this.storage.getSignedUrl(path))
+          record.attachments.map((path) => this.storage.getSignedUrl(path)),
         );
         return { ...record, attachments: signedAttachments };
-      })
+      }),
     );
   }
 }

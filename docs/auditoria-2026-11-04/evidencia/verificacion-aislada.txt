@@ -1,0 +1,10 @@
+CONFIRMADO 1: UsersService persiste la contraseña sin hash y la devuelve en la respuesta.
+CONFIRMADO 2: La cuenta recién creada no supera bcrypt.compare durante el login.
+CONFIRMADO 3: PATCH de inventario conserva y pasa a Prisma campos fuera del DTO, incluso quantity negativo.
+CONFIRMADO 4: CreateInvoiceDto acepta una factura sin ítems.
+CONFIRMADO 5: El backend rechaza email vacío aunque el formulario de alta lo envía como valor opcional.
+CONFIRMADO 6: Un intercalado concurrente permitido por el servicio deja stock -3 partiendo de 5 (doble simulado, sin PostgreSQL).
+CONFIRMADO 7: La creación de turno pide a Prisma todos los campos del médico, incluido password.
+CONFIRMADO 8: Pacientes e historias clínicas tienen autenticación JWT sin guard ni metadatos de roles.
+
+8 observaciones verificadas con datos sintéticos; ninguna conexión externa.

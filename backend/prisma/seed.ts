@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
+import * as bcrypt from 'bcrypt';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as xlsx from 'xlsx';
@@ -19,6 +20,12 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('🌱 Iniciando el sembrado de la base de datos Surmed...');
 
+  const demoRawPassword = process.env.SEED_DEMO_PASSWORD || 'DemoSurmed2026!';
+  if (demoRawPassword.length < 8) {
+    throw new Error('SEED_DEMO_PASSWORD debe tener al menos 8 caracteres.');
+  }
+  const hashedDemoPassword = await bcrypt.hash(demoRawPassword, 10);
+
   // --- 1. ESPECIALIDADES, MÉDICOS Y PACIENTES ---
   const clinicaMedica = await prisma.specialty.upsert({
     where: { name: 'Clínica Médica' },
@@ -34,23 +41,35 @@ async function main() {
 
   const drMartinez = await prisma.user.upsert({
     where: { email: 'drmartinez@surmed.com' },
-    update: {},
+    update: {
+      password: hashedDemoPassword,
+      isActive: true,
+    },
     create: {
       name: 'Diego Martínez',
       email: 'drmartinez@surmed.com',
-      password: 'password123',
+      password: hashedDemoPassword,
       role: 'MEDICO',
+      specialties: {
+        connect: [{ id: clinicaMedica.id }],
+      },
     },
   });
 
   const draGomez = await prisma.user.upsert({
     where: { email: 'dragomez@surmed.com' },
-    update: {},
+    update: {
+      password: hashedDemoPassword,
+      isActive: true,
+    },
     create: {
       name: 'Laura Gómez',
       email: 'dragomez@surmed.com',
-      password: 'password123',
+      password: hashedDemoPassword,
       role: 'MEDICO',
+      specialties: {
+        connect: [{ id: cardiologia.id }],
+      },
     },
   });
 
@@ -84,10 +103,10 @@ async function main() {
 
   // --- 2. AGENDA ---
   const hoy = new Date();
-  hoy.setHours(10, 0, 0, 0); 
+  hoy.setHours(10, 0, 0, 0);
   const manana = new Date(hoy);
   manana.setDate(manana.getDate() + 1);
-  manana.setHours(14, 30, 0, 0); 
+  manana.setHours(14, 30, 0, 0);
 
   await prisma.appointment.create({
     data: {
@@ -118,7 +137,6 @@ async function main() {
   console.log('📦 Sembrando inventario desde archivos Excel...');
   const dataDir = path.join(process.cwd(), 'prisma', 'data');
 
-  // Nombres exactos de tus archivos
   const files = [
     { filename: 'inv1.xlsx', category: 'ACTIVO_FIJO' },
     { filename: 'inv2.xlsx', category: 'OFICINA' },
@@ -129,40 +147,36 @@ async function main() {
 
   for (const file of files) {
     const filePath = path.join(dataDir, file.filename);
-    
+
     if (!fs.existsSync(filePath)) {
       console.log(`⚠️ No se encontró ${file.filename}, saltando...`);
       continue;
     }
 
-    // Leemos el archivo Excel
     const workbook = xlsx.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    
-    // Convertimos la hoja a un array de arrays para poder saltar filas fácilmente
+
     const rows = xlsx.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
     let count = 0;
-    
-    // Empezamos desde el índice 5 (fila 6 de Excel) para saltar la cabecera
+
     for (let i = 5; i < rows.length; i++) {
       const row = rows[i];
       if (!row || row.length === 0) continue;
 
-      // Según la estructura típica: B=ID, C=Nombre, D=Desc, E=Precio, F=Cantidad
-      const id = row[1]; 
+      const id = row[1];
       const name = row[2];
       const description = row[3];
       const price = row[4];
       const quantity = row[5];
 
-      // Validamos que tenga un ID con guión (ej: 001-001) para asegurar que es un producto
       if (id && typeof id === 'string' && id.includes('-') && name) {
         const productName = String(name).trim();
-        
-        // Verificamos si ya existe
-        const existing = await prisma.product.findFirst({ where: { name: productName } });
+
+        const existing = await prisma.product.findFirst({
+          where: { name: productName },
+        });
 
         if (!existing) {
           await prisma.product.create({
@@ -173,7 +187,7 @@ async function main() {
               quantity: parseInt(String(quantity)) || 0,
               minStock: file.category === 'INSUMO_MEDICO' ? 10 : 2,
               category: file.category as any,
-            }
+            },
           });
           count++;
         }
@@ -203,8 +217,7 @@ async function main() {
 
   // --- 5. FACTURACIÓN (Test Data) ---
   console.log('💰 Sembrando facturación de prueba...');
-  
-  // Factura 1: Consulta básica (Pagada)
+
   const invoice1 = await prisma.invoice.create({
     data: {
       patientId: paciente1.id,
@@ -223,7 +236,6 @@ async function main() {
     },
   });
 
-  // Factura 2: Consulta + Prácticas (Pendiente)
   const invoice2 = await prisma.invoice.create({
     data: {
       patientId: paciente2.id,

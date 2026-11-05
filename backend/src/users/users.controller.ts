@@ -1,39 +1,60 @@
-import { Controller, Get, Post, Body, Query, Param, Patch, Delete, UseGuards } from '@nestjs/common'; // <-- SUMAR UseGuards
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto'; 
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // <-- IMPORTAR
-import { RolesGuard } from '../auth/guards/roles.guard'; // <-- IMPORTAR
-import { Roles } from '../auth/decorators/roles.decorator'; // <-- IMPORTAR
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import type { RequestWithUser } from '../auth/interfaces/auth.interface';
 
-@UseGuards(JwtAuthGuard, RolesGuard) // <-- 1. PROTEGER TODA LA CLASE
+@ApiTags('Usuarios / Staff')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  async findAll(@Query('role') role?: string) {
-    return await this.usersService.findAll(role);
+  @Roles('ADMIN', 'MEDICO', 'RECEPCION')
+  async findAll(
+    @Query('role') role?: string,
+    @Request() req?: RequestWithUser,
+  ) {
+    return await this.usersService.findAll(role, req?.user?.role);
   }
 
   @Get(':id')
+  @Roles('ADMIN')
   async findOne(@Param('id') id: string) {
     return await this.usersService.findOne(id);
   }
 
   @Post()
-  @Roles('ADMIN') // <-- 2. BLOQUEO ESTRICTO
-  async create(@Body() createData: CreateUserDto) { 
+  @Roles('ADMIN')
+  async create(@Body() createData: CreateUserDto) {
     return await this.usersService.create(createData);
   }
 
   @Patch(':id')
-  @Roles('ADMIN') // <-- 3. BLOQUEO ESTRICTO
-  async update(@Param('id') id: string, @Body() updateData: Partial<CreateUserDto>) {
+  @Roles('ADMIN')
+  async update(@Param('id') id: string, @Body() updateData: UpdateUserDto) {
     return await this.usersService.update(id, updateData);
   }
 
   @Delete(':id')
-  @Roles('ADMIN') // <-- 4. BLOQUEO ESTRICTO
+  @Roles('ADMIN')
   async remove(@Param('id') id: string) {
     return await this.usersService.remove(id);
   }

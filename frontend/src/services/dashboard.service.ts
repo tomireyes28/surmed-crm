@@ -1,12 +1,10 @@
 import { api } from './api';
 
-// 1. Interfaz para las métricas
 export interface DashboardKpis {
   totalPatients: number;
-  monthlyRevenue: number;
+  monthlyRevenue: number | null;
 }
 
-// 2. Interfaz para los turnos de la agenda (con las relaciones que incluye Prisma)
 export interface DashboardAppointment {
   id: string;
   date: string;
@@ -23,7 +21,6 @@ export interface DashboardAppointment {
   };
 }
 
-// 3. Interfaz para los insumos con bajo stock
 export interface DashboardLowStock {
   id: string;
   name: string;
@@ -36,14 +33,18 @@ export const dashboardService = {
     const { data } = await api.get<DashboardKpis>('/dashboard-stats/kpis');
     return data;
   },
-  
+
   getTodayAppointments: async (): Promise<DashboardAppointment[]> => {
-    const { data } = await api.get<DashboardAppointment[]>('/dashboard-stats/today-appointments');
+    const { data } = await api.get<DashboardAppointment[]>(
+      '/dashboard-stats/today-appointments',
+    );
     return data;
   },
-  
+
   getLowStock: async (): Promise<DashboardLowStock[]> => {
-    const { data } = await api.get<DashboardLowStock[]>('/dashboard-stats/low-stock');
+    const { data } = await api.get<DashboardLowStock[]>(
+      '/dashboard-stats/low-stock',
+    );
     return data;
-  }
+  },
 };

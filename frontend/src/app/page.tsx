@@ -1,16 +1,19 @@
 'use client';
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, LoginFormValues } from '../schemas/auth.schema';
 import { useAuthStore } from '../store/authStore';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
-import {api} from '@/services/api';
+import { isAxiosError } from 'axios';
+import { api } from '@/services/api';
 
 export default function LoginPage() {
   const setAuth = useAuthStore((state) => state.setAuth);
   const router = useRouter();
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const {
     register,
@@ -21,22 +24,39 @@ export default function LoginPage() {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
+    setLoginError(null);
     try {
       const response = await api.post('/auth/login', data);
       const { backendToken, user } = response.data;
-      
-      // 1. Guardamos en Zustand para la UI rápida
+
       setAuth(backendToken, user);
-      
-      // 2. Guardamos en Cookies para el Middleware de Next.js (expira en 1 día)
-      Cookies.set('token', backendToken, { expires: 1 });
-      
-      // 3. Redirigimos
+
+      const isSecure =
+        typeof window !== 'undefined' && window.location.protocol === 'https:';
+      Cookies.set('token', backendToken, {
+        expires: 1 / 3, // 8 horas
+        sameSite: 'strict',
+        secure: isSecure,
+      });
+
       router.push('/dashboard');
-      
     } catch (error) {
-      console.error('Error en el login', error);
-      alert('Credenciales incorrectas');
+      if (isAxiosError(error)) {
+        if (error.response?.status === 429) {
+          setLoginError(
+            'Demasiados intentos fallidos. Por favor, espere unos minutos antes de volver a intentar.',
+          );
+          return;
+        }
+        const backendMessage = error.response?.data?.message;
+        setLoginError(
+          typeof backendMessage === 'string'
+            ? backendMessage
+            : 'Credenciales incorrectas o usuario inactivo.',
+        );
+      } else {
+        setLoginError('No se pudo conectar con el servidor. Intente nuevamente.');
+      }
     }
   };
 
@@ -45,30 +65,63 @@ export default function LoginPage() {
       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border border-slate-100">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-slate-800">Surmed CRM</h1>
-          <p className="text-slate-500 text-sm mt-2">Ingresa tus credenciales para continuar</p>
+          <p className="text-slate-500 text-sm mt-2">
+            Ingresa tus credenciales para continuar
+          </p>
         </div>
+
+        {loginError && (
+          <div
+            role="alert"
+            className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm"
+          >
+            {loginError}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <label
+              htmlFor="login-email"
+              className="block text-sm font-medium text-slate-700 mb-1"
+            >
+              Email
+            </label>
             <input
+              id="login-email"
               type="email"
+              autoComplete="username"
               {...register('email')}
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              placeholder="admin@surmed.com"
+              placeholder="nombre@surmed.com"
             />
-            {errors.email && <span className="text-red-500 text-xs mt-1">{errors.email.message}</span>}
+            {errors.email && (
+              <span className="text-red-500 text-xs mt-1">
+                {errors.email.message}
+              </span>
+            )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+            <label
+              htmlFor="login-password"
+              className="block text-sm font-medium text-slate-700 mb-1"
+            >
+              Contraseña
+            </label>
             <input
+              id="login-password"
               type="password"
+              autoComplete="current-password"
               {...register('password')}
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
               placeholder="••••••••"
             />
-            {errors.password && <span className="text-red-500 text-xs mt-1">{errors.password.message}</span>}
+            {errors.password && (
+              <span className="text-red-500 text-xs mt-1">
+                {errors.password.message}
+              </span>
+            )}
           </div>
 
           <button
