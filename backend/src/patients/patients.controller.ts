@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -45,19 +46,22 @@ export class PatientsController {
 
   @Get(':id')
   @Roles('ADMIN', 'MEDICO', 'RECEPCION')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.patientsService.findOne(id);
   }
 
   @Patch(':id')
   @Roles('ADMIN', 'MEDICO', 'RECEPCION')
-  update(@Param('id') id: string, @Body() updatePatientDto: UpdatePatientDto) {
+  update(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() updatePatientDto: UpdatePatientDto,
+  ) {
     return this.patientsService.update(id, updatePatientDto);
   }
 
   @Delete(':id')
   @Roles('ADMIN')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.patientsService.remove(id);
   }
 }

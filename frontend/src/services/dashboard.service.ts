@@ -3,12 +3,19 @@ import { api } from './api';
 export interface DashboardKpis {
   totalPatients: number;
   monthlyRevenue: number | null;
+  monthlyPending?: number | null;
+  monthlyIssued?: number | null;
 }
 
 export interface DashboardAppointment {
   id: string;
   date: string;
-  status: 'PENDING' | 'CONFIRMED' | 'IN_WAITING_ROOM' | 'ATTENDED' | 'CANCELLED';
+  status:
+    | 'PENDING'
+    | 'CONFIRMED'
+    | 'IN_WAITING_ROOM'
+    | 'ATTENDED'
+    | 'CANCELLED';
   patient: {
     firstName: string;
     lastName: string;

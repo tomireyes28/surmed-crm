@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X, Save, Loader2, Search } from 'lucide-react';
+import { isAxiosError } from 'axios';
 
 import {
   createAppointmentSchema,
@@ -44,6 +45,7 @@ export function NewAppointmentModal({
 
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
@@ -53,8 +55,24 @@ export function NewAppointmentModal({
     defaultValues: {
       duration: 30,
       patientId: preselectedPatientId || '',
+      specialtyId: '',
+      doctorId: '',
     },
   });
+
+  const selectedSpecialtyId = useWatch({
+    control,
+    name: 'specialtyId',
+  });
+
+  // Filtrar médicos según la especialidad seleccionada para evitar asignaciones incoherentes (F06 / T09)
+  const filteredDoctors = selectedSpecialtyId
+    ? doctors.filter(
+        (d) =>
+          !Array.isArray(d.specialties) ||
+          d.specialties.some((s) => s.id === selectedSpecialtyId),
+      )
+    : doctors;
 
   useEffect(() => {
     if (preselectedPatientId) {
@@ -137,13 +155,25 @@ export function NewAppointmentModal({
 
   const onSubmit = async (data: CreateAppointmentFormValues) => {
     try {
-      await appointmentService.createAppointment(data);
+      // Aseguramos offset explícito del centro (-03:00 America/Asuncion) si proviene de datetime-local (F07 / T09)
+      const hasOffset = /(?:Z|[+-]\d{2}:\d{2})$/i.test(data.date);
+      const normalizedDate = hasOffset
+        ? data.date
+        : `${data.date.length === 16 ? `${data.date}:00` : data.date}-03:00`;
+
+      await appointmentService.createAppointment({
+        ...data,
+        date: normalizedDate,
+      });
       reset();
       onSuccess();
       onClose();
     } catch (error) {
       console.error('Error al agendar turno:', error);
-      alert('Hubo un error al guardar el turno');
+      const message = isAxiosError(error)
+        ? error.response?.data?.message || 'Hubo un error al guardar el turno'
+        : 'Hubo un error al guardar el turno';
+      alert(message);
     }
   };
 
@@ -260,7 +290,9 @@ export function NewAppointmentModal({
                 Especialidad *
               </label>
               <select
-                {...register('specialtyId')}
+                {...register('specialtyId', {
+                  onChange: () => setValue('doctorId', ''),
+                })}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="">Seleccione una especialidad</option>
@@ -287,7 +319,7 @@ export function NewAppointmentModal({
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="">Seleccione un médico</option>
-                {doctors.map((d) => (
+                {filteredDoctors.map((d) => (
                   <option key={d.id} value={d.id}>
                     Dr/a. {d.name}
                   </option>
@@ -304,7 +336,7 @@ export function NewAppointmentModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Fecha y Hora *
+                  Fecha y Hora (Hora Asunción) *
                 </label>
                 <input
                   type="datetime-local"
@@ -325,6 +357,7 @@ export function NewAppointmentModal({
                   type="number"
                   step="15"
                   min="15"
+                  max="240"
                   {...register('duration', { valueAsNumber: true })}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
                 />

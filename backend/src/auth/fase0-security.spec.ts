@@ -324,23 +324,32 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
       const prismaMock = {
         patient: { count: jest.fn().mockResolvedValue(42) },
         invoice: {
-          findMany: jest.fn().mockResolvedValue([{ totalAmount: 150000 }]),
+          findMany: jest
+            .fn()
+            .mockResolvedValue([{ totalAmount: 150000, status: 'PAID' }]),
         },
       };
       const dashboardService = new DashboardService(prismaMock as never);
 
       const medicoStats = await dashboardService.getStats('MEDICO');
-      expect(medicoStats).toEqual({ totalPatients: 42, monthlyRevenue: null });
+      expect(medicoStats).toMatchObject({
+        totalPatients: 42,
+        monthlyRevenue: null,
+        monthlyPending: null,
+        monthlyIssued: null,
+      });
       expect(prismaMock.invoice.findMany).not.toHaveBeenCalled();
 
       const recepcionStats = await dashboardService.getStats('RECEPCION');
-      expect(recepcionStats).toEqual({
+      expect(recepcionStats).toMatchObject({
         totalPatients: 42,
         monthlyRevenue: null,
+        monthlyPending: null,
+        monthlyIssued: null,
       });
 
       const adminStats = await dashboardService.getStats('ADMIN');
-      expect(adminStats).toEqual({
+      expect(adminStats).toMatchObject({
         totalPatients: 42,
         monthlyRevenue: 150000,
       });

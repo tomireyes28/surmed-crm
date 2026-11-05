@@ -69,6 +69,7 @@ model MedicalRecord {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([patientId, createdAt])
   @@map("medical_records")
 }
 
@@ -84,7 +85,7 @@ model Product {
   description String?
   quantity    Int      @default(0) 
   minStock    Int      @default(5) 
-  price       Float?   
+  price       Decimal? @db.Decimal(12, 2)
   
   category    ProductCategory @default(INSUMO_MEDICO)
   isActive    Boolean         @default(true)
@@ -98,19 +99,21 @@ model Product {
 }
 
 model StockMovement {
-  id          String   @id @default(uuid())
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid())
+  productId      String
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
   
-  userId      String
-  user        User     @relation(fields: [userId], references: [id]) 
+  userId         String
+  user           User         @relation(fields: [userId], references: [id]) 
   
-  type        MovementType
-  quantity    Int      
-  notes       String?
+  type           MovementType
+  quantity       Int      
+  notes          String?
+  idempotencyKey String?      @unique
   
-  createdAt   DateTime @default(now())
+  createdAt      DateTime     @default(now())
 
+  @@index([productId, createdAt])
   @@map("stock_movements")
 }
 
@@ -120,18 +123,26 @@ enum MovementType {
 }
 
 model Invoice {
-  id          String   @id @default(uuid())
-  patientId   String
-  patient     Patient  @relation(fields: [patientId], references: [id])
+  id             String        @id @default(uuid())
+  patientId      String
+  patient        Patient       @relation(fields: [patientId], references: [id])
   
-  totalAmount Float    
-  status      InvoiceStatus @default(PENDING)
+  totalAmount    Decimal       @db.Decimal(12, 2)
+  status         InvoiceStatus @default(PENDING)
   
-  items       InvoiceItem[]
+  paidAt         DateTime?
+  paidById       String?
+  cancelledAt    DateTime?
+  cancelledById  String?
+  cancelReason   String?
+  idempotencyKey String?       @unique
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  items          InvoiceItem[]
 
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([patientId, createdAt])
   @@map("invoices")
 }
 
@@ -142,8 +153,8 @@ model InvoiceItem {
   
   description String   
   quantity    Int      @default(1)
-  unitPrice   Float
-  subtotal    Float    
+  unitPrice   Decimal  @db.Decimal(12, 2)
+  subtotal    Decimal  @db.Decimal(12, 2)
   
   createdAt   DateTime @default(now())
 
@@ -182,24 +193,28 @@ enum AppointmentStatus {
 }
 
 model Appointment {
-  id          String            @id @default(uuid())
+  id             String            @id @default(uuid())
   
-  patientId   String
-  patient     Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId      String
+  patient        Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
   
-  doctorId    String
-  doctor      User              @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  doctorId       String
+  doctor         User              @relation("DoctorAppointments", fields: [doctorId], references: [id])
   
-  specialtyId String
-  specialty   Specialty         @relation(fields: [specialtyId], references: [id])
+  specialtyId    String
+  specialty      Specialty         @relation(fields: [specialtyId], references: [id])
   
-  date        DateTime          // Fecha y hora exacta del turno
-  duration    Int               @default(30) // Duración estimada en minutos
-  status      AppointmentStatus @default(PENDING)
-  notes       String?           @db.Text
+  date           DateTime          // Fecha y hora exacta del turno
+  duration       Int               @default(30) // Duración estimada en minutos
+  status         AppointmentStatus @default(PENDING)
+  notes          String?           @db.Text
+  cancelReason   String?
+  idempotencyKey String?           @unique
   
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
+  @@index([doctorId, date])
+  @@index([patientId, date])
   @@map("appointments")
 }

@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2, Save, Receipt, Search } from 'lucide-react';
 import { isAxiosError } from 'axios';
+import { formatPYG } from '@/utils/format';
 
 export default function NewInvoicePage() {
   const router = useRouter();
@@ -19,6 +20,11 @@ export default function NewInvoicePage() {
   const [patientPage, setPatientPage] = useState(1);
   const [patientTotalPages, setPatientTotalPages] = useState(1);
   const [isLoadingPatients, setIsLoadingPatients] = useState(true);
+  const [idempotencyKey] = useState<string>(() =>
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `inv-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
 
   const {
     register,
@@ -30,6 +36,7 @@ export default function NewInvoicePage() {
     defaultValues: {
       patientId: '',
       items: [{ description: '', quantity: 1, unitPrice: 0 }],
+      payNow: false,
     },
   });
 
@@ -47,7 +54,7 @@ export default function NewInvoicePage() {
   const totalAmount = watchItems.reduce((acc, item) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unitPrice) || 0;
-    return acc + qty * price;
+    return acc + Math.round(qty * price * 100) / 100;
   }, 0);
 
   const fetchPatients = useCallback(async (page: number, search: string) => {
@@ -72,14 +79,23 @@ export default function NewInvoicePage() {
 
   const onSubmit = async (data: InvoiceFormValues) => {
     try {
-      await invoicesService.create(data);
+      await invoicesService.create(
+        {
+          ...data,
+          idempotencyKey,
+        },
+        idempotencyKey,
+      );
       router.push('/dashboard/invoices');
     } catch (error) {
-      console.error('Error al crear factura', error);
+      console.error('Error al crear comprobante', error);
       if (isAxiosError(error)) {
-        alert(error.response?.data?.message || 'Error al generar la factura');
+        alert(
+          error.response?.data?.message ||
+            'Error al generar el comprobante',
+        );
       } else {
-        alert('Error inesperado al facturar');
+        alert('Error inesperado al emitir el comprobante');
       }
     }
   };
@@ -97,10 +113,10 @@ export default function NewInvoicePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <Receipt className="text-blue-600" />
-            Nueva Factura
+            Nuevo Comprobante
           </h1>
           <p className="text-sm text-slate-500">
-            Genere un nuevo cobro y agregue los ítems correspondientes.
+            Emita un comprobante interno y registre el cobro cuando se efectúe el pago.
           </p>
         </div>
       </div>
@@ -109,7 +125,7 @@ export default function NewInvoicePage() {
         {/* Bloque 1: Datos del Paciente con búsqueda paginada en servidor */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-3">
           <h2 className="font-bold text-slate-800 border-b border-slate-100 pb-2">
-            Datos del Cliente / Paciente
+            Datos del Paciente
           </h2>
 
           <div className="relative">
@@ -195,7 +211,7 @@ export default function NewInvoicePage() {
         {/* Bloque 2: Ítems de la Factura */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
           <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
-            <h2 className="font-bold text-slate-800">Líneas de Cobro</h2>
+            <h2 className="font-bold text-slate-800">Líneas del Comprobante</h2>
             <button
               type="button"
               onClick={() =>
@@ -214,7 +230,7 @@ export default function NewInvoicePage() {
                 Descripción del servicio / insumo
               </div>
               <div className="col-span-2 text-center">Cantidad</div>
-              <div className="col-span-3 text-right">Precio Unit. ($)</div>
+              <div className="col-span-3 text-right">Precio Unit. (Gs.)</div>
               <div className="col-span-1"></div>
             </div>
 
@@ -231,7 +247,7 @@ export default function NewInvoicePage() {
                   </span>
                   <input
                     {...register(`items.${index}.description` as const)}
-                    placeholder="Ej: Consulta cardiológica"
+                    placeholder="Ej: Consulta médica general"
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   {errors.items?.[index]?.description && (
@@ -264,10 +280,11 @@ export default function NewInvoicePage() {
                 {/* Precio Unitario */}
                 <div className="col-span-1 sm:col-span-3">
                   <span className="text-xs font-medium text-slate-500 mb-1 block sm:hidden">
-                    Precio Unit.
+                    Precio Unit. (Gs.)
                   </span>
                   <input
                     type="number"
+                    step="any"
                     {...register(`items.${index}.unitPrice` as const, {
                       valueAsNumber: true,
                     })}
@@ -298,12 +315,26 @@ export default function NewInvoicePage() {
             ))}
           </div>
 
-          {/* Fila de Total */}
-          <div className="mt-6 pt-4 border-t border-slate-200 flex justify-end items-center gap-4">
-            <span className="text-slate-500 font-medium">Total Estimado:</span>
-            <span className="text-3xl font-bold text-emerald-600">
-              ${totalAmount.toLocaleString('es-AR')}
-            </span>
+          {/* Estado inicial de cobro + Fila de Total */}
+          <div className="mt-6 pt-4 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                {...register('payNow')}
+                className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <span>
+                Registrar cobro inmediato (marcar comprobante como{' '}
+                <strong>Cobrado</strong>)
+              </span>
+            </label>
+
+            <div className="flex items-center gap-4 self-end sm:self-auto">
+              <span className="text-slate-500 font-medium">Total:</span>
+              <span className="text-3xl font-bold text-emerald-600">
+                {formatPYG(totalAmount)}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -321,7 +352,7 @@ export default function NewInvoicePage() {
             className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-blue-400 flex items-center gap-2"
           >
             <Save size={20} />
-            {isSubmitting ? 'Generando...' : 'Emitir Factura'}
+            {isSubmitting ? 'Generando...' : 'Emitir Comprobante'}
           </button>
         </div>
       </form>

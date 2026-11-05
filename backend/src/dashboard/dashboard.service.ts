@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { toCents } from '../common/utils/money.util';
+import {
+  getClinicDateParts,
+  getClinicDayBounds,
+  getClinicMonthBounds,
+} from '../common/utils/timezone.util';
 
 @Injectable()
 export class DashboardService {
@@ -13,38 +19,65 @@ export class DashboardService {
 
     // Solo ADMIN tiene permiso para recibir información financiera / ingresos mensuales (S08 / T02)
     if (role !== 'ADMIN') {
-      return { totalPatients, monthlyRevenue: null };
+      return {
+        totalPatients,
+        monthlyRevenue: null,
+        monthlyPending: null,
+        monthlyIssued: null,
+      };
     }
 
-    const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const { year, month } = getClinicDateParts(new Date());
+    const { start: firstDayOfMonth, end: lastDayOfMonth } =
+      getClinicMonthBounds(year, month);
 
     const currentMonthInvoices = await this.prisma.invoice.findMany({
       where: {
-        createdAt: { gte: firstDayOfMonth },
+        createdAt: {
+          gte: firstDayOfMonth,
+          lte: lastDayOfMonth,
+        },
         status: { not: 'CANCELLED' },
       },
     });
-    const monthlyRevenue = currentMonthInvoices.reduce(
-      (sum, inv) => sum + inv.totalAmount,
-      0,
-    );
 
-    return { totalPatients, monthlyRevenue };
+    // Separación estricta de Cobrado (PAID) vs Pendiente (PENDING) vs Emitido (T10 / F09):
+    // Emitir una factura en estado PENDING NO incrementa `monthlyRevenue` ("Cobrado").
+    let paidCents = 0;
+    let pendingCents = 0;
+
+    for (const inv of currentMonthInvoices) {
+      const amountCents = toCents(inv.totalAmount);
+      if (inv.status === 'PAID') {
+        paidCents += amountCents;
+      } else if (inv.status === 'PENDING') {
+        pendingCents += amountCents;
+      }
+    }
+
+    const monthlyRevenue = Math.round(paidCents) / 100;
+    const monthlyPending = Math.round(pendingCents) / 100;
+    const monthlyIssued = Math.round(paidCents + pendingCents) / 100;
+
+    return {
+      totalPatients,
+      monthlyRevenue,
+      monthlyPending,
+      monthlyIssued,
+    };
   }
 
   async getTodayAppointments() {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
+    const { start: todayStart, end: todayEnd } = getClinicDayBounds(new Date());
 
     return await this.prisma.appointment.findMany({
       where: {
         date: {
           gte: todayStart,
           lt: todayEnd,
+        },
+        status: {
+          not: 'CANCELLED',
         },
       },
       include: {
@@ -58,9 +91,16 @@ export class DashboardService {
 
   async getLowStock() {
     const products = await this.prisma.product.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        category: 'INSUMO_MEDICO',
+      },
     });
 
-    return products.filter((p) => p.quantity <= p.minStock);
+    return products.filter(
+      (p) =>
+        (p.category === undefined || p.category === 'INSUMO_MEDICO') &&
+        p.quantity <= p.minStock,
+    );
   }
 }

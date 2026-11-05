@@ -2,14 +2,18 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AppointmentsService } from './appointments.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -26,20 +30,37 @@ export class AppointmentsController {
   @Post()
   async create(
     @Body() createAppointmentDto: CreateAppointmentDto,
+    @Headers('idempotency-key') idempotencyHeader?: string,
   ): Promise<Appointment> {
-    return this.appointmentsService.create(createAppointmentDto);
+    return this.appointmentsService.create(
+      createAppointmentDto,
+      idempotencyHeader,
+    );
   }
 
   @Get()
-  async findAll(): Promise<Appointment[]> {
-    return this.appointmentsService.findAll();
+  async findAll(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('doctorId') doctorId?: string,
+    @Query('patientId') patientId?: string,
+    @Query('status') status?: AppointmentStatus,
+  ): Promise<Appointment[]> {
+    const hasFilters = Boolean(from || to || doctorId || patientId || status);
+    return this.appointmentsService.findAll(
+      hasFilters ? { from, to, doctorId, patientId, status } : undefined,
+    );
   }
 
   @Patch(':id/status')
   async updateStatus(
-    @Param('id') id: string,
-    @Body('status') status: AppointmentStatus,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: UpdateAppointmentStatusDto,
   ): Promise<Appointment> {
-    return this.appointmentsService.updateStatus(id, status);
+    return this.appointmentsService.updateStatus(
+      id,
+      body.status,
+      body.cancelReason,
+    );
   }
 }

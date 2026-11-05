@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
@@ -11,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SpecialtiesService } from './specialties.service';
 import { CreateSpecialtyDto } from './dto/create-specialty.dto';
+import { UpdateSpecialtyDto } from './dto/update-specialty.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -36,22 +38,22 @@ export class SpecialtiesController {
 
   @Get(':id')
   @Roles('ADMIN', 'MEDICO', 'RECEPCION')
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return await this.specialtiesService.findOne(id);
   }
 
   @Patch(':id')
   @Roles('ADMIN')
   async update(
-    @Param('id') id: string,
-    @Body() updateData: Partial<CreateSpecialtyDto>,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() updateData: UpdateSpecialtyDto,
   ) {
     return await this.specialtiesService.update(id, updateData);
   }
 
   @Delete(':id')
   @Roles('ADMIN')
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return await this.specialtiesService.remove(id);
   }
 }

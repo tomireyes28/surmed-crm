@@ -18,6 +18,12 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
+import {
+  CLINIC_LOCALE,
+  CLINIC_TIMEZONE,
+  formatClinicTime,
+  formatPYG,
+} from '@/utils/format';
 
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
@@ -28,7 +34,14 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<{
     totalPatients: number;
     monthlyRevenue: number | null;
-  }>({ totalPatients: 0, monthlyRevenue: null });
+    monthlyPending?: number | null;
+    monthlyIssued?: number | null;
+  }>({
+    totalPatients: 0,
+    monthlyRevenue: null,
+    monthlyPending: null,
+    monthlyIssued: null,
+  });
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
   const [lowStock, setLowStock] = useState<DashboardLowStock[]>([]);
 
@@ -57,14 +70,8 @@ export default function DashboardPage() {
     void fetchDashboardData();
   }, [user, canViewInventory]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-    }).format(amount);
-  };
-
-  const todayFormatted = new Intl.DateTimeFormat('es-AR', {
+  const todayFormatted = new Intl.DateTimeFormat(CLINIC_LOCALE, {
+    timeZone: CLINIC_TIMEZONE,
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -102,7 +109,7 @@ export default function DashboardPage() {
               className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-sm"
             >
               <Plus size={18} />
-              Cobrar
+              Emitir Comprobante
             </Link>
           )}
         </div>
@@ -140,17 +147,23 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Solo ADMIN ve la tarjeta de ingresos */}
+        {/* Solo ADMIN ve la tarjeta de ingresos cobrados vs pendientes (T10 / F09) */}
         {user?.role === 'ADMIN' && stats.monthlyRevenue !== null && (
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between group hover:border-emerald-300 transition-colors">
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-slate-500 text-sm font-medium">
-                  Ingresos del Mes
+                  Cobrado del Mes
                 </p>
                 <h3 className="text-2xl font-bold text-emerald-600 mt-1">
-                  {formatCurrency(stats.monthlyRevenue)}
+                  {formatPYG(stats.monthlyRevenue)}
                 </h3>
+                {stats.monthlyPending !== undefined &&
+                  stats.monthlyPending !== null && (
+                    <p className="text-xs text-amber-600 font-medium mt-1">
+                      Pendiente: {formatPYG(stats.monthlyPending)}
+                    </p>
+                  )}
               </div>
               <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
                 <TrendingUp size={24} />
@@ -242,10 +255,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-4">
                       <div className="w-16 text-center">
                         <span className="block text-lg font-bold text-slate-800">
-                          {new Date(apt.date).toLocaleTimeString('es-AR', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          {formatClinicTime(apt.date)}
                         </span>
                       </div>
                       <div>
@@ -309,7 +319,7 @@ export default function DashboardPage() {
                   />
                   <p className="text-center font-medium">Inventario al día</p>
                   <p className="text-center text-sm">
-                    No hay insumos por debajo del stock mínimo.
+                    No hay insumos médicos por debajo del stock mínimo.
                   </p>
                 </div>
               ) : (

@@ -91,40 +91,40 @@ Total base: **21–34 días**. Con margen de integración y ajustes del 20 %, ap
 
 ### T07 · P1 · Validación y respuestas · S05, F08, F10, F11, F13, F15
 
-- [ ] Clases concretas para todos los PATCH y DTO de query; campos editables mapeados explícitamente.
-- [ ] Límites razonables de tamaño, cantidad, página, duración y montos; validar UUID/enum/fechas según contrato.
-- [ ] Normalización de email opcional, espacios, nombres y documento; altas/ediciones coherentes.
-- [ ] Mapeo de errores de Prisma y respuestas 400/404/409 estables; sin datos de infraestructura.
-- [ ] DTO de salida con relaciones mínimas; publicar contrato OpenAPI usable para generar tipos del frontend.
+- [x] Clases concretas para todos los PATCH y DTO de query; campos editables mapeados explícitamente.
+- [x] Límites razonables de tamaño, cantidad, página, duración y montos; validar UUID/enum/fechas según contrato.
+- [x] Normalización de email opcional, espacios, nombres y documento; altas/ediciones coherentes.
+- [x] Mapeo de errores de Prisma y respuestas 400/404/409 estables; sin datos de infraestructura.
+- [x] DTO de salida con relaciones mínimas; publicar contrato OpenAPI usable para generar tipos del frontend.
 
 **Aceptación:** PATCH de producto rechaza `quantity` y relaciones no editables; enviar cantidades negativas/decimales inválidas o roles desconocidos devuelve 400 sin cambios. Alta sin email funciona; vacío y null se manejan según el contrato. Recursos inexistentes y conflictos no terminan en un 500 genérico. Factura sin ítems se rechaza.
 
 ### T08 · P1 · Stock concurrente y trazable · F05, F16, F22
 
-- [ ] Salida atómica condicionada a saldo y estado activo; movimiento y saldo en una misma transacción.
-- [ ] Restricciones de base que impidan saldo inválido; recuperación/reintento según aislamiento elegido.
-- [ ] Clave de idempotencia para movimientos relevantes y política de ajustes/compensaciones.
-- [ ] Saldos iniciales/importación representados de modo que pueda reconciliarse stock con movimientos.
+- [x] Salida atómica condicionada a saldo y estado activo; movimiento y saldo en una misma transacción.
+- [x] Restricciones de base que impidan saldo inválido; recuperación/reintento según aislamiento elegido.
+- [x] Clave de idempotencia para movimientos relevantes y política de ajustes/compensaciones.
+- [x] Saldos iniciales/importación representados de modo que pueda reconciliarse stock con movimientos.
 
 **Aceptación:** en PostgreSQL descartable con saldo 5 y dos salidas simultáneas de 4, exactamente una se acepta, saldo final 1 y un solo movimiento efectivo. Repetir una petición con igual clave no descuenta otra vez. Un fallo del movimiento no altera stock y viceversa. No se puede consumir un producto desactivado mediante su ID.
 
 ### T09 · P1 · Agenda, contexto y zona horaria · F06, F07, F08
 
-- [ ] Validar médico activo, rol, especialidad, paciente y disponibilidad.
-- [ ] Detectar solapamiento por intervalos y preservar esa regla con reservas concurrentes.
-- [ ] Política de estados, cancelación, ausencia y reprogramación; registrar actor/motivo cuando corresponda.
-- [ ] Rango visible/médico como filtro de consulta; preparar consultorios si son recursos limitantes reales.
-- [ ] Configurar `America/Asuncion`; aceptar instantes con offset y mostrar según zona del centro.
+- [x] Validar médico activo, rol, especialidad, paciente y disponibilidad.
+- [x] Detectar solapamiento por intervalos y preservar esa regla con reservas concurrentes.
+- [x] Política de estados, cancelación, ausencia y reprogramación; registrar actor/motivo cuando corresponda.
+- [x] Rango visible/médico como filtro de consulta; preparar consultorios si son recursos limitantes reales.
+- [x] Configurar `America/Asuncion`; aceptar instantes con offset y mostrar según zona del centro.
 
 **Aceptación:** dos reservas concurrentes superpuestas del mismo recurso no se confirman ambas. Otro médico o intervalo contiguo válido sí funciona. No se asigna una especialidad ajena ni un usuario de recepción como médico. El mismo turno conserva su hora del centro con servidor en UTC y navegador en otra zona. Una transición prohibida devuelve conflicto y conserva el estado anterior.
 
 ### T10 · P1 · Importes y flujo de cobro · F09, F10, F19, F22
 
-- [ ] Acordar si Invoice representa deuda, comprobante interno o documento fiscal; separar registro de pago.
-- [ ] Definir PYG y precisión; migrar Float a Decimal o representación entera apropiada con conciliación previa.
-- [ ] Pagos, saldos y anulaciones con actor, motivo y reglas; decidir pagos parciales según necesidad.
-- [ ] KPIs separados de emitido/cobrado/pendiente, con permisos correctos.
-- [ ] Idempotencia para emisión/cobro y protección de totales del lado servidor.
+- [x] Acordar si Invoice representa deuda, comprobante interno o documento fiscal; separar registro de pago.
+- [x] Definir PYG y precisión; migrar Float a Decimal o representación entera apropiada con conciliación previa.
+- [x] Pagos, saldos y anulaciones con actor, motivo y reglas; decidir pagos parciales según necesidad.
+- [x] KPIs separados de emitido/cobrado/pendiente, con permisos correctos.
+- [x] Idempotencia para emisión/cobro y protección de totales del lado servidor.
 
 **Aceptación:** emitir una deuda no aumenta «cobrado»; un pago válido sí y solo una vez. Los totales se conservan exactamente y se calculan en servidor. Anulación no equivale silenciosamente a devolución de dinero. Las cantidades existentes no se convierten de moneda por suposición. La integración fiscal es un proyecto adicional si no estaba contratada.
 

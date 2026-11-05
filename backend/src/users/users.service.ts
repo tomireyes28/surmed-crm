@@ -23,6 +23,8 @@ export const PUBLIC_USER_SELECT = {
   updatedAt: true,
 } as const;
 
+const VALID_ROLES = new Set<string>(['ADMIN', 'MEDICO', 'RECEPCION']);
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -31,6 +33,10 @@ export class UsersService {
   ) {}
 
   async findAll(role?: string, requesterRole?: Role) {
+    if (role !== undefined && role !== '' && !VALID_ROLES.has(role)) {
+      throw new BadRequestException('El rol de filtro indicado no es válido.');
+    }
+
     // Si quien consulta no es ADMIN (ej. RECEPCION o MEDICO), solo puede listar médicos activos
     const effectiveRole: Role | undefined =
       requesterRole && requesterRole !== 'ADMIN'
@@ -69,6 +75,10 @@ export class UsersService {
       );
     }
 
+    if (!VALID_ROLES.has(data.role)) {
+      throw new BadRequestException('El rol indicado no es válido.');
+    }
+
     const existingUser = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
@@ -98,6 +108,29 @@ export class UsersService {
   }
 
   async update(id: string, data: UpdateUserDto) {
+    if (data.role !== undefined && !VALID_ROLES.has(data.role)) {
+      throw new BadRequestException('El rol indicado no es válido.');
+    }
+
+    // Evitar dejar al centro sin ningún administrador activo (F16)
+    if (
+      data.role !== undefined &&
+      data.role !== 'ADMIN' &&
+      typeof this.prisma.user.count === 'function'
+    ) {
+      const targetUser = await this.prisma.user.findUnique({ where: { id } });
+      if (targetUser?.role === 'ADMIN' && targetUser.isActive !== false) {
+        const activeAdmins = await this.prisma.user.count({
+          where: { role: 'ADMIN', isActive: true },
+        });
+        if (activeAdmins <= 1) {
+          throw new ConflictException(
+            'No se puede quitar el rol ADMIN al único administrador activo del centro.',
+          );
+        }
+      }
+    }
+
     const updatePayload: {
       name?: string;
       email?: string;
@@ -135,6 +168,21 @@ export class UsersService {
   }
 
   async remove(id: string) {
+    // Evitar desactivar al último administrador activo del centro (F16)
+    if (typeof this.prisma.user.count === 'function') {
+      const targetUser = await this.prisma.user.findUnique({ where: { id } });
+      if (targetUser?.role === 'ADMIN' && targetUser.isActive !== false) {
+        const activeAdmins = await this.prisma.user.count({
+          where: { role: 'ADMIN', isActive: true },
+        });
+        if (activeAdmins <= 1) {
+          throw new ConflictException(
+            'No se puede desactivar al único administrador activo del centro.',
+          );
+        }
+      }
+    }
+
     this.tokenRevocationService?.revokeAllForUser(id);
     return await this.prisma.user.update({
       where: { id },
