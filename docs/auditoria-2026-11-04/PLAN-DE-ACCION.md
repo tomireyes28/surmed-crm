@@ -187,6 +187,10 @@ Total base: **21–34 días**. Con margen de integración y ajustes del 20 %, ap
 
 No reutilizar las reproducciones de la auditoría como tests que perpetúen el defecto: documentan el estado anterior. Convertir los casos en pruebas que exijan el comportamiento corregido.
 
+- [x] Extraer bootstrap compartido `configureApp(app)` y guardia `assertDisposableTestDatabaseUrl` en `backend/src/setup-app.ts` (reutilizado en `src/main.ts` y en `test/app.e2e-spec.ts`).
+- [x] Reemplazar `backend/test/app.e2e-spec.ts` por la suite de aceptación E2E completa con los mismos pipes, filtros, cabeceras y guardias del servidor real, base descartable identificada como `test` y cierre ordenado (`app.close()`).
+- [x] Documentar la trazabilidad de la matriz de aceptación, el guion de jornada simulada (`ADMIN`, `RECEPCION`, `MEDICO`), la planilla de formación/incidencias y los criterios *Stop-the-Line* en [`PILOTO-Y-MATRIZ-ACEPTACION.md`](PILOTO-Y-MATRIZ-ACEPTACION.md).
+
 | Área | Prueba positiva mínima | Prueba negativa/de regresión |
 | --- | --- | --- |
 | Autenticación | Alta/invitación → login → sesión → logout | Clave inválida, usuario inactivo, JWT vencido, rate limit y clave de configuración ausente |

@@ -46,6 +46,7 @@ export class AuthService {
     this.loginRateLimitService?.reset(email, clientIp);
 
     const jti = randomUUID();
+    this.tokenRevocationService?.registerIssuedToken(user.id, jti);
     const payload = {
       sub: user.id,
       email: user.email,
