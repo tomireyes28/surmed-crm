@@ -17,6 +17,10 @@ import { UpdatePatientDto } from './dto/update-patient.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import {
+  parseBooleanQuery,
+  parsePositiveIntQuery,
+} from '../common/utils/query.util';
 
 @ApiTags('Pacientes')
 @ApiBearerAuth()
@@ -37,11 +41,27 @@ export class PatientsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
+    @Query('includeInactive') includeInactive?: string,
   ) {
-    const parsedPage = page ? Number.parseInt(page, 10) : 1;
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : 10;
+    const parsedPage = parsePositiveIntQuery(page, 'page', 1, {
+      min: 1,
+      max: 10000,
+    });
+    const parsedLimit = parsePositiveIntQuery(limit, 'limit', 10, {
+      min: 1,
+      max: 50,
+    });
+    const parsedIncludeInactive = parseBooleanQuery(
+      includeInactive,
+      'includeInactive',
+    );
 
-    return this.patientsService.findAll(parsedPage, parsedLimit, search);
+    return this.patientsService.findAll(
+      parsedPage,
+      parsedLimit,
+      search,
+      parsedIncludeInactive,
+    );
   }
 
   @Get(':id')
@@ -57,6 +77,12 @@ export class PatientsController {
     @Body() updatePatientDto: UpdatePatientDto,
   ) {
     return this.patientsService.update(id, updatePatientDto);
+  }
+
+  @Patch(':id/reactivate')
+  @Roles('ADMIN', 'RECEPCION')
+  reactivate(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.patientsService.reactivate(id);
   }
 
   @Delete(':id')

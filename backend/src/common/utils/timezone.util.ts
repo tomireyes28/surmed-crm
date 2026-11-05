@@ -170,3 +170,74 @@ export function getClinicMonthBounds(
 
   return { start, end };
 }
+
+/**
+ * Extrae partes civiles `(year, month, day)` de una fecha de nacimiento (`YYYY-MM-DD` o Date UTC).
+ */
+export function extractCivilBirthDateParts(
+  birthDateInput: string | Date,
+): { year: number; month: number; day: number } | null {
+  if (!birthDateInput) return null;
+
+  if (typeof birthDateInput === 'string') {
+    const match = CIVIL_DATE_REGEX.exec(birthDateInput.trim());
+    if (match) {
+      return {
+        year: Number(match[1]),
+        month: Number(match[2]),
+        day: Number(match[3]),
+      };
+    }
+  }
+
+  const parsed =
+    typeof birthDateInput === 'string'
+      ? new Date(birthDateInput)
+      : birthDateInput;
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return {
+    year: parsed.getUTCFullYear(),
+    month: parsed.getUTCMonth() + 1,
+    day: parsed.getUTCDate(),
+  };
+}
+
+/**
+ * Formatea una fecha de nacimiento como `YYYY-MM-DD` civil.
+ */
+export function formatCivilBirthDateInput(
+  birthDateInput: string | Date,
+): string {
+  const parts = extractCivilBirthDateParts(birthDateInput);
+  if (!parts) return '';
+  const mm = String(parts.month).padStart(2, '0');
+  const dd = String(parts.day).padStart(2, '0');
+  return `${parts.year}-${mm}-${dd}`;
+}
+
+/**
+ * Calcula la edad civil exacta en `America/Asuncion` (`F20`).
+ */
+export function calculateCivilAge(
+  birthDateInput: string | Date,
+  referenceDate: Date = new Date(),
+): number {
+  const birth = extractCivilBirthDateParts(birthDateInput);
+  if (!birth) return 0;
+
+  const ref = getClinicDateParts(referenceDate);
+  let age = ref.year - birth.year;
+
+  const hasHadBirthdayThisYear =
+    ref.month > birth.month ||
+    (ref.month === birth.month && ref.day >= birth.day);
+
+  if (!hasHadBirthdayThisYear) {
+    age -= 1;
+  }
+
+  return Math.max(0, age);
+}

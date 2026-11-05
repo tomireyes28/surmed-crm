@@ -26,6 +26,7 @@ export const patientsService = {
     page: number = 1,
     limit: number = 10,
     search?: string,
+    includeInactive: boolean = false,
   ): Promise<PaginatedPatients> => {
     const trimmedSearch = search?.trim();
     const { data } = await api.get<PaginatedPatients>('/patients', {
@@ -33,6 +34,7 @@ export const patientsService = {
         page,
         limit,
         ...(trimmedSearch ? { search: trimmedSearch } : {}),
+        ...(includeInactive ? { includeInactive: 'true' } : {}),
       },
     });
     return data;
@@ -58,6 +60,11 @@ export const patientsService = {
 
   archive: async (id: string): Promise<Patient> => {
     const { data } = await api.delete<Patient>(`/patients/${id}`);
+    return data;
+  },
+
+  reactivate: async (id: string): Promise<Patient> => {
+    const { data } = await api.patch<Patient>(`/patients/${id}/reactivate`);
     return data;
   },
 };

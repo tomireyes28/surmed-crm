@@ -32,7 +32,11 @@ export class UsersService {
     @Optional() private tokenRevocationService?: TokenRevocationService,
   ) {}
 
-  async findAll(role?: string, requesterRole?: Role) {
+  async findAll(
+    role?: string,
+    requesterRole?: Role,
+    includeInactive: boolean = false,
+  ) {
     if (role !== undefined && role !== '' && !VALID_ROLES.has(role)) {
       throw new BadRequestException('El rol de filtro indicado no es válido.');
     }
@@ -42,10 +46,12 @@ export class UsersService {
       requesterRole && requesterRole !== 'ADMIN'
         ? 'MEDICO'
         : (role as Role | undefined);
+    const canIncludeInactive =
+      includeInactive && (!requesterRole || requesterRole === 'ADMIN');
 
     return await this.prisma.user.findMany({
       where: {
-        isActive: true,
+        ...(canIncludeInactive ? {} : { isActive: true }),
         ...(effectiveRole && { role: effectiveRole }),
       },
       select: PUBLIC_USER_SELECT,
@@ -136,6 +142,9 @@ export class UsersService {
       email?: string;
       role?: Role;
       password?: string;
+      specialties?: {
+        set: Array<{ id: string }>;
+      };
     } = {};
 
     if (data.name !== undefined) {
@@ -148,9 +157,19 @@ export class UsersService {
 
     if (data.role !== undefined) {
       updatePayload.role = data.role;
+      if (data.role !== 'MEDICO') {
+        updatePayload.specialties = { set: [] };
+      }
     }
 
-    if (data.password !== undefined) {
+    if (data.specialtyId !== undefined) {
+      const trimmedSpec = data.specialtyId.trim();
+      updatePayload.specialties = trimmedSpec
+        ? { set: [{ id: trimmedSpec }] }
+        : { set: [] };
+    }
+
+    if (data.password !== undefined && data.password.trim().length > 0) {
       if (data.password.trim().length < 8) {
         throw new BadRequestException(
           'La contraseña debe tener al menos 8 caracteres.',
@@ -187,6 +206,15 @@ export class UsersService {
     return await this.prisma.user.update({
       where: { id },
       data: { isActive: false },
+      select: PUBLIC_USER_SELECT,
+    });
+  }
+
+  async reactivate(id: string) {
+    await this.findOne(id);
+    return await this.prisma.user.update({
+      where: { id },
+      data: { isActive: true },
       select: PUBLIC_USER_SELECT,
     });
   }

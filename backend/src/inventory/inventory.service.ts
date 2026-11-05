@@ -65,10 +65,30 @@ export class InventoryService {
     return this.serializeProduct(created);
   }
 
-  // 2. Traer todo el inventario activo
-  async findAllProducts() {
+  // 2. Traer listado de inventario con filtro opcional de búsqueda, categoría y archivados (F14 / F16)
+  async findAllProducts(
+    search?: string,
+    category?: string,
+    includeInactive: boolean = false,
+  ) {
+    const trimmedSearch = search?.trim();
+    const whereClause: Prisma.ProductWhereInput = {
+      ...(includeInactive ? {} : { isActive: true }),
+      ...(category && category !== 'TODOS'
+        ? { category: category as Product['category'] }
+        : {}),
+      ...(trimmedSearch
+        ? {
+            OR: [
+              { name: { contains: trimmedSearch, mode: 'insensitive' } },
+              { description: { contains: trimmedSearch, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
     const products = await this.prisma.product.findMany({
-      where: { isActive: true },
+      where: whereClause,
       orderBy: { name: 'asc' },
     });
 
@@ -136,12 +156,21 @@ export class InventoryService {
     return this.serializeProduct(updated);
   }
 
-  // 5. Borrado Lógico (Desactivar)
+  // 5. Borrado Lógico (Desactivar) y Reactivación explícita (F16)
   async deactivateProduct(id: string) {
     await this.findOne(id);
     const updated = await this.prisma.product.update({
       where: { id },
       data: { isActive: false },
+    });
+    return this.serializeProduct(updated);
+  }
+
+  async reactivateProduct(id: string) {
+    await this.findOne(id);
+    const updated = await this.prisma.product.update({
+      where: { id },
+      data: { isActive: true },
     });
     return this.serializeProduct(updated);
   }

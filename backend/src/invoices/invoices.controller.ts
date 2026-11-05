@@ -18,6 +18,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { RequestWithUser } from '../auth/interfaces/auth.interface';
+import { parsePositiveIntQuery } from '../common/utils/query.util';
 
 @ApiTags('Facturas')
 @ApiBearerAuth()
@@ -48,9 +49,22 @@ export class InvoicesController {
     @Query('month') month?: string,
     @Query('year') year?: string,
     @Query('search') search?: string,
+    @Query('status') status?: string,
   ) {
-    const pageNumber = page ? Number.parseInt(page, 10) : 1;
-    const limitNumber = limit ? Number.parseInt(limit, 10) : 10;
+    const pageNumber = parsePositiveIntQuery(page, 'page', 1, {
+      min: 1,
+      max: 10000,
+    });
+    const limitNumber = parsePositiveIntQuery(limit, 'limit', 10, {
+      min: 1,
+      max: 50,
+    });
+    if (month !== undefined && month !== '') {
+      parsePositiveIntQuery(month, 'month', 1, { min: 1, max: 12 });
+    }
+    if (year !== undefined && year !== '') {
+      parsePositiveIntQuery(year, 'year', 2026, { min: 2000, max: 2100 });
+    }
 
     return await this.invoicesService.findAll(
       patientId,
@@ -59,6 +73,7 @@ export class InvoicesController {
       month,
       year,
       search,
+      status,
     );
   }
 

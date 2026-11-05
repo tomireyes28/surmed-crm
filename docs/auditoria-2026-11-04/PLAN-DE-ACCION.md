@@ -162,24 +162,24 @@ Total base: **21–34 días**. Con margen de integración y ajustes del 20 %, ap
 
 ### T14 · P2 · Navegación y experiencia · F12–F17, F19–F21
 
-- [ ] Reparar enlaces a agenda y páginas de edición faltantes; recorrer todos los botones y rutas.
-- [ ] Búsqueda de servidor, filtros por año, paginación estable y política de archivado/reactivación.
-- [ ] Distinguir error, vacío y carga; reintento; mensajes de validación claros junto al campo.
-- [ ] Labels vinculados a inputs, nombres accesibles para botones de icono, foco visible y errores anunciables.
-- [ ] Modales con rol/nombre, foco inicial y retorno, navegación con Tab y cierre por Escape cuando sea seguro; proteger cambios sin guardar.
-- [ ] Revisar móvil y escritorio, tablas anchas y acciones que hoy dependen de hover.
-- [ ] Configurar es-PY, PYG, +595, documento/cédula; edad civil correcta.
-- [ ] PDF con errores de imagen, saltos de página, textos largos, moneda y estado de anulación.
+- [x] Reparar enlaces a agenda y páginas de edición faltantes; recorrer todos los botones y rutas.
+- [x] Búsqueda de servidor, filtros por año, paginación estable y política de archivado/reactivación.
+- [x] Distinguir error, vacío y carga; reintento; mensajes de validación claros junto al campo.
+- [x] Labels vinculados a inputs, nombres accesibles para botones de icono, foco visible y errores anunciables.
+- [x] Modales con rol/nombre, foco inicial y retorno, navegación con Tab y cierre por Escape cuando sea seguro; proteger cambios sin guardar.
+- [x] Revisar móvil y escritorio, tablas anchas y acciones que hoy dependen de hover.
+- [x] Configurar es-PY, PYG, +595, documento/cédula; edad civil correcta.
+- [x] PDF con errores de imagen, saltos de página, textos largos, moneda y estado de anulación.
 
 **Aceptación:** recorrido con teclado y a anchos de 360, 768 y 1440 px sin pérdida de funciones; botones comprensibles sin hover. No hay enlaces visibles a 404. Búsqueda encuentra pacientes de otras páginas. PDF de múltiples páginas conserva filas y total; si falla el logo se informa o continúa según diseño.
 
 ### T15 · P2 · Refactor y presentación técnica
 
-- [ ] Extraer reglas repetidas de permisos/estados/stock/fecha/moneda; componentes para formularios, estados y paginación.
-- [ ] Separar carga de datos y presentación en páginas complejas sin generar abstracciones genéricas innecesarias.
-- [ ] Endurecer TypeScript y retirar código muerto/generado obsoleto; comentarios de decisiones en lugar de comentarios de edición.
-- [ ] README propio, arquitectura, decisiones, instalación, pruebas, despliegue, backups y alcance conocido.
-- [ ] Demo exclusivamente sintética; confirmar permiso para publicar marca, fuentes, Excel y capturas.
+- [x] Extraer reglas repetidas de permisos/estados/stock/fecha/moneda; componentes para formularios, estados y paginación.
+- [x] Separar carga de datos y presentación en páginas complejas sin generar abstracciones genéricas innecesarias.
+- [x] Endurecer TypeScript y retirar código muerto/generado obsoleto; comentarios de decisiones en lugar de comentarios de edición.
+- [x] README propio, arquitectura, decisiones, instalación, pruebas, despliegue, backups y alcance conocido.
+- [x] Demo exclusivamente sintética; confirmar permiso para publicar marca, fuentes, Excel y capturas.
 
 **Aceptación:** reglas centrales tienen una única implementación o contrato estable, cada extracción tiene una responsabilidad concreta y las pruebas de negocio siguen pasando. Una persona nueva puede levantar y comprender la demo siguiendo la documentación sin pedir secretos del cliente.
 

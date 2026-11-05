@@ -1,16 +1,15 @@
 import { api } from './api';
 import { Specialty } from './specialties.service';
 
-// 1. Interfaz completa para la vista general de Staff
 export interface User {
   id: string;
   name: string;
   email: string;
-  role: string;
+  role: 'ADMIN' | 'MEDICO' | 'RECEPCION' | string;
+  isActive?: boolean;
   specialties: Specialty[];
 }
 
-// 2. Interfaz para los selects de médicos (incluye especialidades asociadas)
 export interface UserDoctor {
   id: string;
   name: string;
@@ -18,7 +17,6 @@ export interface UserDoctor {
   specialties?: Specialty[];
 }
 
-// 3. DTO para tipar estrictamente lo que enviamos al crear
 export interface CreateUserDto {
   name: string;
   email: string;
@@ -27,16 +25,19 @@ export interface CreateUserDto {
   specialtyId?: string;
 }
 
-// 4. DTO para tipar lo que enviamos al actualizar
 export interface UpdateUserDto {
   name?: string;
   email?: string;
   role?: 'ADMIN' | 'MEDICO' | 'RECEPCION';
+  password?: string;
+  specialtyId?: string;
 }
 
 export const usersService = {
-  getAll: async (): Promise<User[]> => {
-    const { data } = await api.get<User[]>('/users');
+  getAll: async (includeInactive: boolean = false): Promise<User[]> => {
+    const { data } = await api.get<User[]>('/users', {
+      params: includeInactive ? { includeInactive: 'true' } : undefined,
+    });
     return data;
   },
 
@@ -62,6 +63,11 @@ export const usersService = {
 
   deactivate: async (id: string): Promise<User> => {
     const { data } = await api.delete<User>(`/users/${id}`);
+    return data;
+  },
+
+  reactivate: async (id: string): Promise<User> => {
+    const { data } = await api.patch<User>(`/users/${id}/reactivate`);
     return data;
   },
 };

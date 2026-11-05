@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { RequestWithUser } from '../auth/interfaces/auth.interface';
+import { parseBooleanQuery } from '../common/utils/query.util';
 
 @ApiTags('Inventario')
 @ApiBearerAuth()
@@ -35,8 +37,20 @@ export class InventoryController {
   }
 
   @Get('products')
-  async findAllProducts() {
-    return await this.inventoryService.findAllProducts();
+  async findAllProducts(
+    @Query('search') search?: string,
+    @Query('category') category?: string,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    const parsedIncludeInactive = parseBooleanQuery(
+      includeInactive,
+      'includeInactive',
+    );
+    return await this.inventoryService.findAllProducts(
+      search,
+      category,
+      parsedIncludeInactive,
+    );
   }
 
   @Get('products/:id')
@@ -50,6 +64,11 @@ export class InventoryController {
     @Body() updateData: UpdateProductDto,
   ) {
     return await this.inventoryService.updateProduct(id, updateData);
+  }
+
+  @Patch('products/:id/reactivate')
+  async reactivateProduct(@Param('id', new ParseUUIDPipe()) id: string) {
+    return await this.inventoryService.reactivateProduct(id);
   }
 
   @Delete('products/:id')

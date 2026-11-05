@@ -24,7 +24,15 @@ import {
 import { NewAppointmentModal } from '../../appointments/components/NewAppointmentModal';
 import { useAuthStore } from '@/store/authStore';
 import { isAxiosError } from 'axios';
-import { formatClinicDate, formatClinicTime } from '@/utils/format';
+import {
+  calculateCivilAge,
+  formatClinicDate,
+  formatClinicTime,
+} from '@/utils/format';
+import {
+  APPOINTMENT_STATUS_META,
+  AppointmentStatusType,
+} from '@/utils/domain-rules';
 
 interface MedicalRecord {
   id: string;
@@ -230,40 +238,16 @@ export default function PatientDetailPage() {
       ) || [];
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return (
-          <span className="px-2 py-1 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded">
-            Pendiente
-          </span>
-        );
-      case 'CONFIRMED':
-        return (
-          <span className="px-2 py-1 text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded">
-            Confirmado
-          </span>
-        );
-      case 'IN_WAITING_ROOM':
-        return (
-          <span className="px-2 py-1 text-[10px] font-semibold bg-amber-100 text-amber-700 rounded">
-            En Espera
-          </span>
-        );
-      case 'ATTENDED':
-        return (
-          <span className="px-2 py-1 text-[10px] font-semibold bg-purple-100 text-purple-700 rounded">
-            Atendido
-          </span>
-        );
-      case 'CANCELLED':
-        return (
-          <span className="px-2 py-1 text-[10px] font-semibold bg-red-100 text-red-700 rounded">
-            Cancelado
-          </span>
-        );
-      default:
-        return null;
-    }
+    const meta =
+      APPOINTMENT_STATUS_META[status as AppointmentStatusType] ?? null;
+    if (!meta) return null;
+    return (
+      <span
+        className={`px-2 py-1 text-[10px] font-semibold rounded ${meta.badgeClass}`}
+      >
+        {meta.label}
+      </span>
+    );
   };
 
   return (
@@ -272,6 +256,7 @@ export default function PatientDetailPage() {
         <div className="flex items-center gap-4">
           <Link
             href="/dashboard/patients"
+            aria-label="Volver al padrón de pacientes"
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
           >
             <ArrowLeft size={24} />
@@ -281,15 +266,14 @@ export default function PatientDetailPage() {
               {patient.lastName}, {patient.firstName}
             </h1>
             <p className="text-slate-500 text-sm mt-1">
-              Documento: {patient.documentId} | Edad:{' '}
-              {new Date().getFullYear() -
-                new Date(patient.birthDate).getFullYear()}{' '}
-              años
+              Documento / C.I.: {patient.documentId} | Edad:{' '}
+              {calculateCivilAge(patient.birthDate)} años
             </p>
           </div>
         </div>
 
         <button
+          type="button"
           onClick={() => setIsAppointmentModalOpen(true)}
           className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
         >
@@ -309,13 +293,22 @@ export default function PatientDetailPage() {
               </div>
 
               <form onSubmit={handleAddNote} className="space-y-4">
-                <textarea
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  className="w-full h-32 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                  placeholder="Escriba los síntomas, diagnóstico o tratamiento indicado..."
-                  required
-                />
+                <div>
+                  <label
+                    htmlFor="clinical-evolution-notes"
+                    className="sr-only"
+                  >
+                    Notas de evolución clínica
+                  </label>
+                  <textarea
+                    id="clinical-evolution-notes"
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    className="w-full h-32 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                    placeholder="Escriba los síntomas, diagnóstico o tratamiento indicado..."
+                    required
+                  />
+                </div>
 
                 <div className="relative">
                   <input

@@ -18,15 +18,17 @@ export const invoicesService = {
     month?: string,
     year?: string,
     search?: string,
+    status?: string,
   ): Promise<PaginatedInvoices> => {
     const trimmedSearch = search?.trim();
     const { data } = await api.get<PaginatedInvoices>('/invoices', {
       params: {
         page,
         limit,
-        month,
-        year,
+        ...(month ? { month } : {}),
+        ...(year ? { year } : {}),
         ...(trimmedSearch ? { search: trimmedSearch } : {}),
+        ...(status ? { status } : {}),
       },
     });
     return data;

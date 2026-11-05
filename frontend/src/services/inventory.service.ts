@@ -1,5 +1,9 @@
 import { api } from './api';
-import { Product, ProductFormValues, MovementFormValues } from '../schemas/inventory.schema';
+import {
+  Product,
+  ProductFormValues,
+  MovementFormValues,
+} from '../schemas/inventory.schema';
 
 export interface UpdateProductDto {
   name?: string;
@@ -10,33 +14,52 @@ export interface UpdateProductDto {
 }
 
 export const inventoryService = {
-  getProducts: async (): Promise<Product[]> => {
-    const { data } = await api.get('/inventory/products');
+  getProducts: async (includeInactive: boolean = false): Promise<Product[]> => {
+    const { data } = await api.get<Product[]>('/inventory/products', {
+      params: includeInactive ? { includeInactive: 'true' } : undefined,
+    });
     return data;
   },
 
   getById: async (id: string): Promise<Product> => {
-    const { data } = await api.get(`/inventory/products/${id}`);
+    const { data } = await api.get<Product>(`/inventory/products/${id}`);
     return data;
   },
 
   createProduct: async (product: ProductFormValues) => {
-    const { data } = await api.post('/inventory/products', product);
+    const { data } = await api.post<Product>('/inventory/products', product);
     return data;
   },
 
   updateProduct: async (id: string, productData: UpdateProductDto) => {
-    const { data } = await api.patch(`/inventory/products/${id}`, productData);
+    const { data } = await api.patch<Product>(
+      `/inventory/products/${id}`,
+      productData,
+    );
     return data;
   },
 
   deactivateProduct: async (id: string) => {
-    const { data } = await api.delete(`/inventory/products/${id}`);
+    const { data } = await api.delete<Product>(`/inventory/products/${id}`);
     return data;
   },
 
-  registerMovement: async (movement: MovementFormValues) => {
-    const { data } = await api.post('/inventory/movements', movement);
+  reactivateProduct: async (id: string) => {
+    const { data } = await api.patch<Product>(
+      `/inventory/products/${id}/reactivate`,
+    );
     return data;
-  }
+  },
+
+  registerMovement: async (
+    movement: MovementFormValues,
+    idempotencyKey?: string,
+  ) => {
+    const { data } = await api.post('/inventory/movements', movement, {
+      headers: idempotencyKey
+        ? { 'Idempotency-Key': idempotencyKey }
+        : undefined,
+    });
+    return data;
+  },
 };

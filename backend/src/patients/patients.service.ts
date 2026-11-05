@@ -80,7 +80,12 @@ export class PatientsService {
     });
   }
 
-  async findAll(page: number = 1, limit: number = 10, search?: string) {
+  async findAll(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    includeInactive: boolean = false,
+  ) {
     const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
     const safeLimit =
       Number.isFinite(limit) && limit >= 1
@@ -90,7 +95,7 @@ export class PatientsService {
     const trimmedSearch = search?.trim();
 
     const whereClause: Prisma.PatientWhereInput = {
-      isActive: true,
+      ...(includeInactive ? {} : { isActive: true }),
       ...(trimmedSearch
         ? {
             OR: [
@@ -214,6 +219,18 @@ export class PatientsService {
     return await this.prisma.patient.update({
       where: { id },
       data: { isActive: false },
+    });
+  }
+
+  async reactivate(id: string) {
+    const existing = await this.prisma.patient.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Paciente no encontrado');
+    }
+
+    return await this.prisma.patient.update({
+      where: { id },
+      data: { isActive: true },
     });
   }
 }

@@ -205,6 +205,7 @@ export class InvoicesService {
     month?: string,
     year?: string,
     search?: string,
+    status?: string,
   ) {
     const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
     const safeLimit =
@@ -219,11 +220,58 @@ export class InvoicesService {
       whereClause.patientId = patientId;
     }
 
+    if (status && status.trim()) {
+      const normalizedStatus = status.trim().toUpperCase();
+      if (
+        normalizedStatus !== 'PENDING' &&
+        normalizedStatus !== 'PAID' &&
+        normalizedStatus !== 'CANCELLED'
+      ) {
+        throw new BadRequestException(
+          'El filtro de estado de comprobante no es válido.',
+        );
+      }
+      whereClause.status = normalizedStatus;
+    }
+
     if (month && year) {
-      const monthNum = Number.parseInt(month, 10);
-      const yearNum = Number.parseInt(year, 10);
+      if (!/^\d+$/.test(month.trim()) || !/^\d+$/.test(year.trim())) {
+        throw new BadRequestException(
+          'Los parámetros de mes y año deben ser enteros válidos.',
+        );
+      }
+      const monthNum = Number.parseInt(month.trim(), 10);
+      const yearNum = Number.parseInt(year.trim(), 10);
+      if (
+        monthNum < 1 ||
+        monthNum > 12 ||
+        yearNum < 2000 ||
+        yearNum > 2100
+      ) {
+        throw new BadRequestException(
+          'Mes (1..12) o año (2000..2100) fuera de rango permitido.',
+        );
+      }
       const { start, end } = getClinicMonthBounds(yearNum, monthNum);
 
+      whereClause.createdAt = {
+        gte: start,
+        lte: end,
+      };
+    } else if (year && year.trim()) {
+      if (!/^\d+$/.test(year.trim())) {
+        throw new BadRequestException(
+          'El parámetro año debe ser un entero válido.',
+        );
+      }
+      const yearNum = Number.parseInt(year.trim(), 10);
+      if (yearNum < 2000 || yearNum > 2100) {
+        throw new BadRequestException(
+          'El año debe estar entre 2000 y 2100.',
+        );
+      }
+      const { start } = getClinicMonthBounds(yearNum, 1);
+      const { end } = getClinicMonthBounds(yearNum, 12);
       whereClause.createdAt = {
         gte: start,
         lte: end,
