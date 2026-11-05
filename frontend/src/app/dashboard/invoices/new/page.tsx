@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { invoiceSchema, InvoiceFormValues } from '@/schemas/invoice.schema';
@@ -9,15 +9,17 @@ import { patientsService } from '@/services/patients.service';
 import { Patient } from '@/schemas/patient.schema';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, Save, Receipt } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Receipt, Search } from 'lucide-react';
 import { isAxiosError } from 'axios';
 
 export default function NewInvoicePage() {
   const router = useRouter();
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientPage, setPatientPage] = useState(1);
+  const [patientTotalPages, setPatientTotalPages] = useState(1);
   const [isLoadingPatients, setIsLoadingPatients] = useState(true);
 
-  // 1. Configuramos el formulario con 1 ítem vacío por defecto
   const {
     register,
     control,
@@ -31,37 +33,42 @@ export default function NewInvoicePage() {
     },
   });
 
-  // 2. Extraemos las herramientas para manejar la lista dinámica de ítems
   const { fields, append, remove } = useFieldArray({
     control,
     name: 'items',
   });
 
-  const watchItems = useWatch({
-    control,
-    name: 'items',
-  }) || [];
+  const watchItems =
+    useWatch({
+      control,
+      name: 'items',
+    }) || [];
 
   const totalAmount = watchItems.reduce((acc, item) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unitPrice) || 0;
-    return acc + (qty * price);
+    return acc + qty * price;
   }, 0);
 
-  // Cargamos los pacientes para el Select
-  useEffect(() => {
-    const fetchPatients = async () => {
-      try {
-        const data = await patientsService.getAll();
-        setPatients(data);
-      } catch (error) {
-        console.error('Error cargando pacientes:', error);
-      } finally {
-        setIsLoadingPatients(false);
-      }
-    };
-    fetchPatients();
+  const fetchPatients = useCallback(async (page: number, search: string) => {
+    setIsLoadingPatients(true);
+    try {
+      const paginated = await patientsService.getAll(page, 10, search);
+      setPatients(paginated.data);
+      setPatientTotalPages(Math.max(1, paginated.meta.totalPages));
+    } catch (error) {
+      console.error('Error cargando pacientes:', error);
+    } finally {
+      setIsLoadingPatients(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchPatients(patientPage, patientSearch);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [patientPage, patientSearch, fetchPatients]);
 
   const onSubmit = async (data: InvoiceFormValues) => {
     try {
@@ -81,7 +88,7 @@ export default function NewInvoicePage() {
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link 
+        <Link
           href="/dashboard/invoices"
           className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
         >
@@ -92,30 +99,96 @@ export default function NewInvoicePage() {
             <Receipt className="text-blue-600" />
             Nueva Factura
           </h1>
-          <p className="text-sm text-slate-500">Genere un nuevo cobro y agregue los ítems correspondientes.</p>
+          <p className="text-sm text-slate-500">
+            Genere un nuevo cobro y agregue los ítems correspondientes.
+          </p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        
-        {/* Bloque 1: Datos del Paciente */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <h2 className="font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Datos del Cliente / Paciente</h2>
+        {/* Bloque 1: Datos del Paciente con búsqueda paginada en servidor */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-3">
+          <h2 className="font-bold text-slate-800 border-b border-slate-100 pb-2">
+            Datos del Cliente / Paciente
+          </h2>
+
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="text"
+              value={patientSearch}
+              onChange={(e) => {
+                setPatientSearch(e.target.value);
+                setPatientPage(1);
+              }}
+              placeholder="Buscar paciente por apellido, nombre o documento..."
+              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Seleccionar Paciente *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Seleccionar Paciente *
+            </label>
             <select
               {...register('patientId')}
               className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               disabled={isLoadingPatients}
             >
-              <option value="">{isLoadingPatients ? 'Cargando pacientes...' : 'Seleccione un paciente...'}</option>
+              <option value="">
+                {isLoadingPatients
+                  ? 'Cargando pacientes...'
+                  : 'Seleccione un paciente...'}
+              </option>
               {patients.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.lastName}, {p.firstName} (DNI: {p.documentId})
+                  {p.lastName}, {p.firstName} (Doc: {p.documentId})
                 </option>
               ))}
             </select>
-            {errors.patientId && <span className="text-red-500 text-xs mt-1">{errors.patientId.message}</span>}
+
+            {patientTotalPages > 1 && (
+              <div className="flex items-center justify-between text-xs text-slate-500 pt-2">
+                <span>
+                  Página {patientPage} de {patientTotalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={patientPage <= 1 || isLoadingPatients}
+                    onClick={() =>
+                      setPatientPage((prev) => Math.max(1, prev - 1))
+                    }
+                    className="px-2.5 py-1 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      patientPage >= patientTotalPages || isLoadingPatients
+                    }
+                    onClick={() =>
+                      setPatientPage((prev) =>
+                        Math.min(patientTotalPages, prev + 1),
+                      )
+                    }
+                    className="px-2.5 py-1 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {errors.patientId && (
+              <span className="text-red-500 text-xs mt-1 block">
+                {errors.patientId.message}
+              </span>
+            )}
           </div>
         </div>
 
@@ -125,7 +198,9 @@ export default function NewInvoicePage() {
             <h2 className="font-bold text-slate-800">Líneas de Cobro</h2>
             <button
               type="button"
-              onClick={() => append({ description: '', quantity: 1, unitPrice: 0 })}
+              onClick={() =>
+                append({ description: '', quantity: 1, unitPrice: 0 })
+              }
               className="text-sm bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-medium hover:bg-slate-200 transition-colors flex items-center gap-1"
             >
               <Plus size={16} /> Agregar Ítem
@@ -135,7 +210,9 @@ export default function NewInvoicePage() {
           <div className="space-y-3">
             {/* Cabeceras de la tabla de ítems (ocultas en móvil) */}
             <div className="hidden sm:grid grid-cols-12 gap-4 text-sm font-medium text-slate-500 px-1">
-              <div className="col-span-6">Descripción del servicio / insumo</div>
+              <div className="col-span-6">
+                Descripción del servicio / insumo
+              </div>
               <div className="col-span-2 text-center">Cantidad</div>
               <div className="col-span-3 text-right">Precio Unit. ($)</div>
               <div className="col-span-1"></div>
@@ -143,46 +220,64 @@ export default function NewInvoicePage() {
 
             {/* Mapeo de campos dinámicos */}
             {fields.map((field, index) => (
-              <div key={field.id} className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4 items-start bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-lg sm:rounded-none">
-                
+              <div
+                key={field.id}
+                className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4 items-start bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-lg sm:rounded-none"
+              >
                 {/* Descripción */}
                 <div className="col-span-1 sm:col-span-6">
-                  <span className="text-xs font-medium text-slate-500 mb-1 block sm:hidden">Descripción</span>
+                  <span className="text-xs font-medium text-slate-500 mb-1 block sm:hidden">
+                    Descripción
+                  </span>
                   <input
                     {...register(`items.${index}.description` as const)}
                     placeholder="Ej: Consulta cardiológica"
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   {errors.items?.[index]?.description && (
-                    <span className="text-red-500 text-xs mt-1 block">{errors.items[index]?.description?.message}</span>
+                    <span className="text-red-500 text-xs mt-1 block">
+                      {errors.items[index]?.description?.message}
+                    </span>
                   )}
                 </div>
 
                 {/* Cantidad */}
                 <div className="col-span-1 sm:col-span-2">
-                  <span className="text-xs font-medium text-slate-500 mb-1 block sm:hidden">Cantidad</span>
+                  <span className="text-xs font-medium text-slate-500 mb-1 block sm:hidden">
+                    Cantidad
+                  </span>
                   <input
                     type="number"
-                    {...register(`items.${index}.quantity` as const, { valueAsNumber: true })}
+                    {...register(`items.${index}.quantity` as const, {
+                      valueAsNumber: true,
+                    })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-center"
                     min="1"
                   />
                   {errors.items?.[index]?.quantity && (
-                    <span className="text-red-500 text-xs mt-1 block">{errors.items[index]?.quantity?.message}</span>
+                    <span className="text-red-500 text-xs mt-1 block">
+                      {errors.items[index]?.quantity?.message}
+                    </span>
                   )}
                 </div>
 
                 {/* Precio Unitario */}
                 <div className="col-span-1 sm:col-span-3">
-                  <span className="text-xs font-medium text-slate-500 mb-1 block sm:hidden">Precio Unit.</span>
+                  <span className="text-xs font-medium text-slate-500 mb-1 block sm:hidden">
+                    Precio Unit.
+                  </span>
                   <input
                     type="number"
-                    {...register(`items.${index}.unitPrice` as const, { valueAsNumber: true })}
+                    {...register(`items.${index}.unitPrice` as const, {
+                      valueAsNumber: true,
+                    })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-right"
                     min="0"
                   />
                   {errors.items?.[index]?.unitPrice && (
-                    <span className="text-red-500 text-xs mt-1 block">{errors.items[index]?.unitPrice?.message}</span>
+                    <span className="text-red-500 text-xs mt-1 block">
+                      {errors.items[index]?.unitPrice?.message}
+                    </span>
                   )}
                 </div>
 
@@ -202,7 +297,7 @@ export default function NewInvoicePage() {
               </div>
             ))}
           </div>
-          
+
           {/* Fila de Total */}
           <div className="mt-6 pt-4 border-t border-slate-200 flex justify-end items-center gap-4">
             <span className="text-slate-500 font-medium">Total Estimado:</span>

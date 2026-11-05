@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "patients" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
+
+-- AlterTable
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;

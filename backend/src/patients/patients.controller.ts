@@ -32,11 +32,15 @@ export class PatientsController {
 
   @Get()
   @Roles('ADMIN', 'MEDICO', 'RECEPCION')
-  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
-    const pageNumber = page ? parseInt(page, 10) : 1;
-    const limitNumber = limit ? parseInt(limit, 10) : 10;
+  findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    const parsedPage = page ? Number.parseInt(page, 10) : 1;
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 10;
 
-    return this.patientsService.findAll(pageNumber, limitNumber);
+    return this.patientsService.findAll(parsedPage, parsedLimit, search);
   }
 
   @Get(':id')

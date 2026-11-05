@@ -2,278 +2,252 @@ import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as xlsx from 'xlsx';
 
-// 1. Configuramos el adaptador de Postgres
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error('❌ No se encontró DATABASE_URL en el archivo .env');
-}
-
-const pool = new Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
-
+/**
+ * Seed exclusivamente de DEMOSTRACIÓN (datos sintéticos e idempotentes).
+ * - Para aprovisionar el administrador real usar: npm run provision:admin
+ * - Para importar el inventario comercial desde Excel usar: npm run import:inventory
+ */
 async function main() {
-  console.log('🌱 Iniciando el sembrado de la base de datos Surmed...');
-
-  const demoRawPassword = process.env.SEED_DEMO_PASSWORD || 'DemoSurmed2026!';
-  if (demoRawPassword.length < 8) {
-    throw new Error('SEED_DEMO_PASSWORD debe tener al menos 8 caracteres.');
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_SEED !== 'true') {
+    throw new Error(
+      'El seed de demostración está bloqueado en producción. Use provision:admin o import:inventory.',
+    );
   }
-  const hashedDemoPassword = await bcrypt.hash(demoRawPassword, 10);
 
-  // --- 1. ESPECIALIDADES, MÉDICOS Y PACIENTES ---
-  const clinicaMedica = await prisma.specialty.upsert({
-    where: { name: 'Clínica Médica' },
-    update: {},
-    create: { name: 'Clínica Médica', description: 'Atención primaria y preventiva' },
-  });
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL es obligatorio en el archivo .env');
+  }
 
-  const cardiologia = await prisma.specialty.upsert({
-    where: { name: 'Cardiología' },
-    update: {},
-    create: { name: 'Cardiología', description: 'Salud cardiovascular' },
-  });
+  const pool = new Pool({ connectionString });
+  const adapter = new PrismaPg(pool);
+  const prisma = new PrismaClient({ adapter });
 
-  const drMartinez = await prisma.user.upsert({
-    where: { email: 'drmartinez@surmed.com' },
-    update: {
-      password: hashedDemoPassword,
-      isActive: true,
-    },
-    create: {
-      name: 'Diego Martínez',
-      email: 'drmartinez@surmed.com',
-      password: hashedDemoPassword,
-      role: 'MEDICO',
-      specialties: {
-        connect: [{ id: clinicaMedica.id }],
-      },
-    },
-  });
+  try {
+    console.log('🌱 Sembrando datos sintéticos de demostración (idempotente)...');
 
-  const draGomez = await prisma.user.upsert({
-    where: { email: 'dragomez@surmed.com' },
-    update: {
-      password: hashedDemoPassword,
-      isActive: true,
-    },
-    create: {
-      name: 'Laura Gómez',
-      email: 'dragomez@surmed.com',
-      password: hashedDemoPassword,
-      role: 'MEDICO',
-      specialties: {
-        connect: [{ id: cardiologia.id }],
-      },
-    },
-  });
-
-  const paciente1 = await prisma.patient.upsert({
-    where: { documentId: '35123456' },
-    update: {},
-    create: {
-      firstName: 'Juan',
-      lastName: 'Pérez',
-      documentId: '35123456',
-      email: 'juan.perez@gmail.com',
-      phone: '+54 11 4321 5678',
-      birthDate: new Date('1990-05-15'),
-    },
-  });
-
-  const paciente2 = await prisma.patient.upsert({
-    where: { documentId: '40987654' },
-    update: {},
-    create: {
-      firstName: 'Sofía',
-      lastName: 'Fernández',
-      documentId: '40987654',
-      email: 'sofia.fer@hotmail.com',
-      phone: '+54 11 8765 4321',
-      birthDate: new Date('1995-10-20'),
-    },
-  });
-
-  console.log('✅ Especialidades, Médicos y Pacientes listos');
-
-  // --- 2. AGENDA ---
-  const hoy = new Date();
-  hoy.setHours(10, 0, 0, 0);
-  const manana = new Date(hoy);
-  manana.setDate(manana.getDate() + 1);
-  manana.setHours(14, 30, 0, 0);
-
-  await prisma.appointment.create({
-    data: {
-      patientId: paciente1.id,
-      doctorId: drMartinez.id,
-      specialtyId: clinicaMedica.id,
-      date: hoy,
-      duration: 30,
-      status: 'CONFIRMED',
-      notes: 'Control anual de rutina',
-    },
-  });
-
-  await prisma.appointment.create({
-    data: {
-      patientId: paciente2.id,
-      doctorId: draGomez.id,
-      specialtyId: cardiologia.id,
-      date: manana,
-      duration: 45,
-      status: 'PENDING',
-      notes: 'Electrocardiograma preventivo',
-    },
-  });
-  console.log('✅ Turnos de prueba agendados');
-
-  // --- 3. INVENTARIO REAL DESDE EXCEL ---
-  console.log('📦 Sembrando inventario desde archivos Excel...');
-  const dataDir = path.join(process.cwd(), 'prisma', 'data');
-
-  const files = [
-    { filename: 'inv1.xlsx', category: 'ACTIVO_FIJO' },
-    { filename: 'inv2.xlsx', category: 'OFICINA' },
-    { filename: 'inv3.xlsx', category: 'INSUMO_MEDICO' },
-    { filename: 'inv4.xlsx', category: 'INSUMO_MEDICO' },
-    { filename: 'inv5.xlsx', category: 'INSUMO_MEDICO' },
-  ];
-
-  for (const file of files) {
-    const filePath = path.join(dataDir, file.filename);
-
-    if (!fs.existsSync(filePath)) {
-      console.log(`⚠️ No se encontró ${file.filename}, saltando...`);
-      continue;
+    const demoRawPassword = process.env.SEED_DEMO_PASSWORD || 'DemoSurmed2026!';
+    if (demoRawPassword.length < 8) {
+      throw new Error('SEED_DEMO_PASSWORD debe tener al menos 8 caracteres.');
     }
+    const hashedDemoPassword = await bcrypt.hash(demoRawPassword, 10);
 
-    const workbook = xlsx.readFile(filePath);
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
+    // 1. Especialidades
+    const clinicaMedica = await prisma.specialty.upsert({
+      where: { name: 'Clínica Médica' },
+      update: { description: 'Atención primaria y preventiva' },
+      create: {
+        name: 'Clínica Médica',
+        description: 'Atención primaria y preventiva',
+      },
+    });
 
-    const rows = xlsx.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+    const cardiologia = await prisma.specialty.upsert({
+      where: { name: 'Cardiología' },
+      update: { description: 'Salud cardiovascular' },
+      create: {
+        name: 'Cardiología',
+        description: 'Salud cardiovascular',
+      },
+    });
 
-    let count = 0;
+    // 2. Médicos de demo conectados con sus especialidades (F18 / S02)
+    const drMartinez = await prisma.user.upsert({
+      where: { email: 'drmartinez@surmed.demo' },
+      update: {
+        name: 'Diego Martínez (Demo)',
+        password: hashedDemoPassword,
+        role: 'MEDICO',
+        isActive: true,
+        specialties: {
+          set: [{ id: clinicaMedica.id }],
+        },
+      },
+      create: {
+        name: 'Diego Martínez (Demo)',
+        email: 'drmartinez@surmed.demo',
+        password: hashedDemoPassword,
+        role: 'MEDICO',
+        isActive: true,
+        specialties: {
+          connect: [{ id: clinicaMedica.id }],
+        },
+      },
+    });
 
-    for (let i = 5; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row || row.length === 0) continue;
+    const draGomez = await prisma.user.upsert({
+      where: { email: 'dragomez@surmed.demo' },
+      update: {
+        name: 'Laura Gómez (Demo)',
+        password: hashedDemoPassword,
+        role: 'MEDICO',
+        isActive: true,
+        specialties: {
+          set: [{ id: cardiologia.id }],
+        },
+      },
+      create: {
+        name: 'Laura Gómez (Demo)',
+        email: 'dragomez@surmed.demo',
+        password: hashedDemoPassword,
+        role: 'MEDICO',
+        isActive: true,
+        specialties: {
+          connect: [{ id: cardiologia.id }],
+        },
+      },
+    });
 
-      const id = row[1];
-      const name = row[2];
-      const description = row[3];
-      const price = row[4];
-      const quantity = row[5];
+    // 3. Pacientes sintéticos
+    const paciente1 = await prisma.patient.upsert({
+      where: { documentId: 'DEMO-4500111' },
+      update: { isActive: true },
+      create: {
+        firstName: 'Juan',
+        lastName: 'Pérez (Demo)',
+        documentId: 'DEMO-4500111',
+        email: 'juan.perez@demo.invalid',
+        phone: '+595 981 100200',
+        birthDate: new Date('1990-05-15'),
+        isActive: true,
+      },
+    });
 
-      if (id && typeof id === 'string' && id.includes('-') && name) {
-        const productName = String(name).trim();
+    const paciente2 = await prisma.patient.upsert({
+      where: { documentId: 'DEMO-4800222' },
+      update: { isActive: true },
+      create: {
+        firstName: 'Sofía',
+        lastName: 'Fernández (Demo)',
+        documentId: 'DEMO-4800222',
+        email: 'sofia.fernandez@demo.invalid',
+        phone: '+595 981 300400',
+        birthDate: new Date('1995-10-20'),
+        isActive: true,
+      },
+    });
 
-        const existing = await prisma.product.findFirst({
-          where: { name: productName },
-        });
+    // 4. Productos sintéticos de demo (idempotentes, sin mezclar Excel comercial)
+    const demoProducts = [
+      {
+        name: 'Guantes de Nitrilo (Demo)',
+        description: 'Caja x 100 unidades sintética de prueba',
+        price: 45000,
+        quantity: 25,
+        minStock: 10,
+        category: 'INSUMO_MEDICO' as const,
+      },
+      {
+        name: 'Jeringas Descartables 5ml (Demo)',
+        description: 'Insumo de demostración con bajo stock',
+        price: 2500,
+        quantity: 4,
+        minStock: 10,
+        category: 'INSUMO_MEDICO' as const,
+      },
+    ];
 
-        if (!existing) {
-          await prisma.product.create({
-            data: {
-              name: productName,
-              description: description ? String(description).trim() : '',
-              price: parseFloat(String(price)) || 0,
-              quantity: parseInt(String(quantity)) || 0,
-              minStock: file.category === 'INSUMO_MEDICO' ? 10 : 2,
-              category: file.category as any,
-            },
-          });
-          count++;
-        }
+    for (const prod of demoProducts) {
+      const existing = await prisma.product.findFirst({
+        where: { name: prod.name },
+      });
+      if (!existing) {
+        await prisma.product.create({ data: prod });
       }
     }
-    console.log(`✅ ${file.filename}: ${count} productos importados.`);
-  }
 
-  // --- 4. HISTORIAS CLÍNICAS (Test Data) ---
-  console.log('📝 Sembrando historias clínicas de prueba...');
-  await prisma.medicalRecord.create({
-    data: {
-      patientId: paciente1.id,
-      doctorId: drMartinez.id,
-      notes: 'Paciente acude a control anual. Refiere sentirse bien, sin dolores en el pecho ni fatiga. Se indica continuar con dieta baja en sodio y ejercicio moderado 3 veces por semana.',
-    },
-  });
+    // 5. Turnos, Historias y Facturas de demo (solo si el paciente demo aún no los tiene, evitando duplicar en re-ejecución)
+    const existingAppointments = await prisma.appointment.count({
+      where: { patientId: { in: [paciente1.id, paciente2.id] } },
+    });
 
-  await prisma.medicalRecord.create({
-    data: {
-      patientId: paciente2.id,
-      doctorId: draGomez.id,
-      notes: 'Paciente presenta cuadro febril de 48hs de evolución acompañado de odinofagia. Al examen físico: amígdalas eritematosas. Se indica tratamiento con Amoxicilina 500mg cada 8hs por 7 días.',
-    },
-  });
-  console.log('✅ Historias clínicas creadas');
+    if (existingAppointments === 0) {
+      const hoy = new Date();
+      hoy.setHours(10, 0, 0, 0);
+      const manana = new Date(hoy);
+      manana.setDate(manana.getDate() + 1);
+      manana.setHours(14, 30, 0, 0);
 
-  // --- 5. FACTURACIÓN (Test Data) ---
-  console.log('💰 Sembrando facturación de prueba...');
+      await prisma.appointment.createMany({
+        data: [
+          {
+            patientId: paciente1.id,
+            doctorId: drMartinez.id,
+            specialtyId: clinicaMedica.id,
+            date: hoy,
+            duration: 30,
+            status: 'CONFIRMED',
+            notes: 'Control anual de rutina (Demo)',
+          },
+          {
+            patientId: paciente2.id,
+            doctorId: draGomez.id,
+            specialtyId: cardiologia.id,
+            date: manana,
+            duration: 45,
+            status: 'PENDING',
+            notes: 'Electrocardiograma preventivo (Demo)',
+          },
+        ],
+      });
+    }
 
-  const invoice1 = await prisma.invoice.create({
-    data: {
-      patientId: paciente1.id,
-      totalAmount: 15000,
-      status: 'PAID',
-    },
-  });
+    const existingRecords = await prisma.medicalRecord.count({
+      where: { patientId: { in: [paciente1.id, paciente2.id] } },
+    });
 
-  await prisma.invoiceItem.create({
-    data: {
-      invoiceId: invoice1.id,
-      description: 'Consulta Médica - Dr. Martínez',
-      quantity: 1,
-      unitPrice: 15000,
-      subtotal: 15000,
-    },
-  });
+    if (existingRecords === 0) {
+      await prisma.medicalRecord.createMany({
+        data: [
+          {
+            patientId: paciente1.id,
+            doctorId: drMartinez.id,
+            notes: 'Evolución sintética de prueba: control clínico normal.',
+            attachments: [],
+          },
+          {
+            patientId: paciente2.id,
+            doctorId: draGomez.id,
+            notes: 'Evolución sintética de prueba: seguimiento cardiológico.',
+            attachments: [],
+          },
+        ],
+      });
+    }
 
-  const invoice2 = await prisma.invoice.create({
-    data: {
-      patientId: paciente2.id,
-      totalAmount: 45000,
-      status: 'PENDING',
-    },
-  });
+    const existingInvoices = await prisma.invoice.count({
+      where: { patientId: { in: [paciente1.id, paciente2.id] } },
+    });
 
-  await prisma.invoiceItem.create({
-    data: {
-      invoiceId: invoice2.id,
-      description: 'Consulta Médica - Dra. Gómez',
-      quantity: 1,
-      unitPrice: 15000,
-      subtotal: 15000,
-    },
-  });
+    if (existingInvoices === 0) {
+      await prisma.invoice.create({
+        data: {
+          patientId: paciente1.id,
+          totalAmount: 150000,
+          status: 'PAID',
+          items: {
+            create: [
+              {
+                description: 'Consulta Médica - Clínica Médica (Demo)',
+                quantity: 1,
+                unitPrice: 150000,
+                subtotal: 150000,
+              },
+            ],
+          },
+        },
+      });
+    }
 
-  await prisma.invoiceItem.create({
-    data: {
-      invoiceId: invoice2.id,
-      description: 'Electrocardiograma de reposo',
-      quantity: 1,
-      unitPrice: 30000,
-      subtotal: 30000,
-    },
-  });
-  console.log('✅ Facturas de prueba creadas');
-
-  console.log('🎉 Sembrado finalizado con éxito!');
-}
-
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
+    console.log('✅ Sembrado sintético de demostración finalizado sin duplicados.');
+  } finally {
     await prisma.$disconnect();
     await pool.end();
-  });
+  }
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

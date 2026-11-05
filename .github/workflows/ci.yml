@@ -1,0 +1,80 @@
+name: Surmed CRM — CI (Calidad, Contratos y Seguridad)
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  backend:
+    name: Backend (Lint, Typecheck, Tests, Build & Audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies (reproducible)
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Lint (sin escritura)
+        run: npm run lint:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit & Domain Tests
+        run: npm test -- --runInBand
+
+      - name: Production Build & Entrypoint Verification
+        run: |
+          npm run build
+          test -f dist/main.js
+
+      - name: Production Dependency Audit (Critical/High)
+        run: npm audit --omit=dev --audit-level=high
+
+  frontend:
+    name: Frontend (Lint, Typecheck, Build & Audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (reproducible)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck (Contratos API y Componentes)
+        run: npm run typecheck
+
+      - name: Production Build
+        run: npm run build
+
+      - name: Production Dependency Audit (Critical/High)
+        run: npm audit --omit=dev --audit-level=high

@@ -59,31 +59,31 @@ Total base: **21–34 días**. Con margen de integración y ajustes del 20 %, ap
 
 ### T04 · P1 · Compilación y consumidores de API · F01, F02
 
-- [ ] Definir tipos de especialidad y actualizar los tres imports rotos.
-- [ ] Corregir el consumo de `PaginatedPatients` en nueva factura y nuevo turno.
-- [ ] Crear búsqueda de pacientes paginada para selects; soportar preselección por ID fuera de la página actual.
-- [ ] Incorporar verificación de tipos y contratos en CI.
+- [x] Definir tipos de especialidad y actualizar los tres imports rotos.
+- [x] Corregir el consumo de `PaginatedPatients` en nueva factura y nuevo turno.
+- [x] Crear búsqueda de pacientes paginada para selects; soportar preselección por ID fuera de la página actual.
+- [x] Incorporar verificación de tipos y contratos en CI.
 
 **Aceptación:** build y typecheck del frontend pasan; con más de diez pacientes se puede agendar y facturar a cualquiera, incluso abriendo el modal desde su ficha. Una respuesta paginada no provoca `.map is not a function`. No se resuelve con un cast ni con un límite enorme de registros.
 
 ### T05 · P1 · Base y paquete de producción · F03, F04, F18
 
-- [ ] Agregar migraciones hacia adelante para el esquema actual; no reescribir migraciones aplicadas del cliente.
-- [ ] Corregir el layout del build/entrypoint productivo.
-- [ ] Separar seed demo, primer administrador e importación de inventario.
-- [ ] Importación comercial con preview, validación, idempotencia y reporte; no mezclar datos de demo.
-- [ ] Entregar `.env.example`, versiones de Node, scripts y guía de instalación desde un checkout limpio.
-- [ ] Revisar clientes Prisma generados duplicados y garantizar `prisma generate` en el proceso de entrega.
+- [x] Agregar migraciones hacia adelante para el esquema actual; no reescribir migraciones aplicadas del cliente.
+- [x] Corregir el layout del build/entrypoint productivo.
+- [x] Separar seed demo, primer administrador e importación de inventario.
+- [x] Importación comercial con preview, validación, idempotencia y reporte; no mezclar datos de demo.
+- [x] Entregar `.env.example`, versiones de Node, scripts y guía de instalación desde un checkout limpio.
+- [x] Revisar clientes Prisma generados duplicados y garantizar `prisma generate` en el proceso de entrega.
 
 **Aceptación:** instalación con `npm ci`, generación, migraciones y build funciona desde cero en entorno descartable; también se prueba actualizar una versión anterior conservando sus datos. El comando de producción levanta el backend real y su health check responde. Dos importaciones del mismo archivo no duplican productos. Nunca se usa `migrate reset` sobre la base del cliente.
 
 ### T06 · P1 · Dependencias y controles automáticos · alertas npm
 
-- [ ] Clasificar cada alerta por cadena de dependencia, entorno y funcionalidad usada.
-- [ ] Actualizar Next y su configuración ESLint en versiones compatibles; Multer y dependencias de Express; restantes paquetes prioritarios.
-- [ ] Aislar/remediar `xlsx` en el importador. Revisar Prisma/herramientas sin degradar versiones a ciegas.
-- [ ] Fijar políticas de lockfile, actualización y revisión de avisos; evitar comodín `*` sin justificación.
-- [ ] CI: lint sin escritura, typecheck, builds, pruebas de dominio e integración y auditoría de dependencias.
+- [x] Clasificar cada alerta por cadena de dependencia, entorno y funcionalidad usada.
+- [x] Actualizar Next y su configuración ESLint en versiones compatibles; Multer y dependencias de Express; restantes paquetes prioritarios.
+- [x] Aislar/remediar `xlsx` en el importador. Revisar Prisma/herramientas sin degradar versiones a ciegas.
+- [x] Fijar políticas de lockfile, actualización y revisión de avisos; evitar comodín `*` sin justificación.
+- [x] CI: lint sin escritura, typecheck, builds, pruebas de dominio e integración y auditoría de dependencias.
 
 **Aceptación:** ninguna alerta crítica/alta aplicable queda sin remediación o mitigación documentada y revisada. Las alertas de herramientas y código no usado se distinguen de exposición productiva. Un fallo de build o test impide desplegar. La auditoría vuelve a consultarse al implementar; las versiones propuestas el 04/11/2026 no son una recomendación permanente.
 

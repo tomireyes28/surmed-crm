@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
@@ -30,18 +31,41 @@ export class PatientsService {
     });
   }
 
-  async findAll(page: number = 1, limit: number = 10) {
-    const skip = (page - 1) * limit;
+  async findAll(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+  ) {
+    const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
+    const safeLimit =
+      Number.isFinite(limit) && limit >= 1
+        ? Math.min(50, Math.floor(limit))
+        : 10;
+    const skip = (safePage - 1) * safeLimit;
+    const trimmedSearch = search?.trim();
+
+    const whereClause: Prisma.PatientWhereInput = {
+      isActive: true,
+      ...(trimmedSearch
+        ? {
+            OR: [
+              { firstName: { contains: trimmedSearch, mode: 'insensitive' } },
+              { lastName: { contains: trimmedSearch, mode: 'insensitive' } },
+              { documentId: { contains: trimmedSearch, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
 
     const [data, total] = await Promise.all([
       this.prisma.patient.findMany({
-        where: { isActive: true },
+        where: whereClause,
         orderBy: { lastName: 'asc' },
         skip,
-        take: limit,
+        take: safeLimit,
       }),
       this.prisma.patient.count({
-        where: { isActive: true },
+        where: whereClause,
       }),
     ]);
 
@@ -49,9 +73,9 @@ export class PatientsService {
       data,
       meta: {
         total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.ceil(total / safeLimit),
       },
     };
   }

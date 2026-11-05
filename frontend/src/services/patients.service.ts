@@ -11,7 +11,6 @@ export interface UpdatePatientDto {
   birthDate?: string;
 }
 
-// NUEVO: Interfaz para la respuesta del backend
 export interface PaginatedPatients {
   data: Patient[];
   meta: {
@@ -23,25 +22,36 @@ export interface PaginatedPatients {
 }
 
 export const patientsService = {
-  // NUEVO: Agregamos parámetros por defecto (página 1, límite 10)
-  getAll: async (page: number = 1, limit: number = 10): Promise<PaginatedPatients> => {
-    const { data } = await api.get('/patients', {
-      params: { page, limit }
+  getAll: async (
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+  ): Promise<PaginatedPatients> => {
+    const trimmedSearch = search?.trim();
+    const { data } = await api.get<PaginatedPatients>('/patients', {
+      params: {
+        page,
+        limit,
+        ...(trimmedSearch ? { search: trimmedSearch } : {}),
+      },
     });
     return data;
   },
-  
-  getById: async (id: string) => {
-    const { data } = await api.get(`/patients/${id}`);
+
+  getById: async (id: string): Promise<Patient> => {
+    const { data } = await api.get<Patient>(`/patients/${id}`);
     return data;
   },
 
-  create: async (patient: PatientFormValues) => {
-    const { data } = await api.post('/patients', patient);
+  create: async (patient: PatientFormValues): Promise<Patient> => {
+    const { data } = await api.post<Patient>('/patients', patient);
     return data;
   },
 
-  update: async (id: string, patientData: UpdatePatientDto): Promise<Patient> => {
+  update: async (
+    id: string,
+    patientData: UpdatePatientDto,
+  ): Promise<Patient> => {
     const { data } = await api.patch<Patient>(`/patients/${id}`, patientData);
     return data;
   },
@@ -49,5 +59,5 @@ export const patientsService = {
   archive: async (id: string): Promise<Patient> => {
     const { data } = await api.delete<Patient>(`/patients/${id}`);
     return data;
-  } 
+  },
 };
