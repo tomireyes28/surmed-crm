@@ -15,11 +15,32 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { RequestWithUser } from './interfaces/auth.interface';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './decorators/roles.decorator';
+import { IssueRecoveryDto, RedeemRecoveryDto } from './dto/recovery.dto';
 
 @ApiTags('Autenticación')
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
+
+  @Post('recovery/issue')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  issueRecovery(
+    @Body() dto: IssueRecoveryDto,
+    @Request() req: RequestWithUser,
+  ) {
+    return this.authService.issueRecovery(dto, req.user!.id);
+  }
+
+  @Post('recovery/redeem')
+  redeemRecovery(
+    @Body() dto: RedeemRecoveryDto,
+    @Request() req: RequestWithUser,
+  ) {
+    return this.authService.redeemRecovery(dto, req.ip);
+  }
 
   @HttpCode(HttpStatus.OK)
   @Post('login')

@@ -1,63 +1,55 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-
-interface AttemptBucket {
-  count: number;
-  resetAt: number;
-}
+import { createHash } from 'node:crypto';
+import { PrismaService } from '../prisma/prisma.service';
+import { serializable } from '../common/utils/transaction.util';
 
 @Injectable()
 export class LoginRateLimitService {
-  private readonly attempts = new Map<string, AttemptBucket>();
-  private readonly maxAttempts = 5;
-  private readonly windowMs = 15 * 60 * 1000; // 15 minutos
+  constructor(private readonly prisma: PrismaService) {}
 
-  private buildKeys(email: string, ip?: string): string[] {
-    const normalizedEmail = email.trim().toLowerCase();
-    const keys = [`email:${normalizedEmail}`];
-    if (ip) {
-      keys.push(`ip:${ip}:${normalizedEmail}`);
-    }
-    return keys;
-  }
-
-  assertAllowed(email: string, ip?: string): void {
+  async assertAllowed(email: string, ip?: string): Promise<void> {
     const now = Date.now();
-    for (const key of this.buildKeys(email, ip)) {
-      const bucket = this.attempts.get(key);
-      if (!bucket) continue;
-
-      if (bucket.resetAt <= now) {
-        this.attempts.delete(key);
-        continue;
-      }
-
-      if (bucket.count >= this.maxAttempts) {
-        throw new HttpException(
-          'Demasiados intentos fallidos de inicio de sesión. Intente nuevamente más tarde.',
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-    }
-  }
-
-  recordFailure(email: string, ip?: string): void {
-    const now = Date.now();
-    for (const key of this.buildKeys(email, ip)) {
-      const existing = this.attempts.get(key);
-      if (!existing || existing.resetAt <= now) {
-        this.attempts.set(key, {
-          count: 1,
-          resetAt: now + this.windowMs,
+    const windowMs = 15 * 60 * 1000;
+    const window = Math.floor(now / windowMs);
+    const hash = (value: string) =>
+      createHash('sha256').update(value).digest('hex');
+    const keys = [
+      { key: `account:${hash(email.trim().toLowerCase())}:${window}`, max: 5 },
+    ];
+    if (ip) keys.push({ key: `ip:${hash(ip)}:${window}`, max: 100 });
+    await serializable(
+      this.prisma,
+      async (tx) => {
+        await tx.authRateBucket.deleteMany({
+          where: { expiresAt: { lte: new Date(now) } },
         });
-      } else {
-        existing.count += 1;
-      }
-    }
+        for (const { key, max } of keys) {
+          const bucket = await tx.authRateBucket.upsert({
+            where: { key },
+            create: {
+              key,
+              count: 1,
+              expiresAt: new Date((window + 1) * windowMs),
+            },
+            update: { count: { increment: 1 } },
+          });
+          if (bucket.count > max)
+            throw new HttpException(
+              'Demasiados intentos fallidos de inicio de sesión. Intente nuevamente más tarde.',
+              HttpStatus.TOO_MANY_REQUESTS,
+            );
+        }
+      },
+      true,
+    );
   }
 
-  reset(email: string, ip?: string): void {
-    for (const key of this.buildKeys(email, ip)) {
-      this.attempts.delete(key);
-    }
+  async reset(email: string): Promise<void> {
+    const key = createHash('sha256')
+      .update(email.trim().toLowerCase())
+      .digest('hex');
+    await this.prisma.authRateBucket.deleteMany({
+      where: { key: { startsWith: `account:${key}:` } },
+    });
   }
 }

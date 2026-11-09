@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { AppModule } from '../src/app.module';
+import { rateStore } from './helpers/rate-store';
 import { sessionStore } from './helpers/session-store';
 import {
   assertDisposableTestDatabaseUrl,
@@ -152,7 +153,53 @@ interface TestAuditLog {
  */
 class DisposableInMemoryPrisma {
   readonly authSession = sessionStore().authSession;
-  readonly medicalAttachment = { findUnique: jest.fn().mockResolvedValue(null) };
+  readonly authRateBucket = rateStore().authRateBucket;
+  readonly recoveryToken = {
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+  };
+  readonly grants = new Map<
+    string,
+    { patientId: string; doctorId: string; revokedAt: Date | null }
+  >();
+  readonly clinicalAccess = {
+    findUnique: jest.fn(
+      ({
+        where,
+      }: {
+        where: { patientId_doctorId: { patientId: string; doctorId: string } };
+      }) =>
+        Promise.resolve(
+          this.grants.get(
+            `${where.patientId_doctorId.patientId}:${where.patientId_doctorId.doctorId}`,
+          ) ?? null,
+        ),
+    ),
+    upsert: jest.fn(
+      ({
+        create,
+      }: {
+        create: { patientId: string; doctorId: string; revokedAt: Date | null };
+      }) => {
+        this.grants.set(`${create.patientId}:${create.doctorId}`, create);
+        return Promise.resolve(create);
+      },
+    ),
+  };
+  readonly medicalAttachment = {
+    findUnique: jest.fn().mockResolvedValue(null),
+    findMany: jest.fn(() =>
+      Promise.resolve(
+        [...this.medicalRecords.values()].flatMap((record) =>
+          record.attachments.map(() => ({
+            id: record.id,
+            medicalRecordId: record.id,
+            isRevoked: false,
+            scanStatus: 'CLEAN_MAGIC_VERIFIED',
+          })),
+        ),
+      ),
+    ),
+  };
   readonly specialties = new Map<string, TestSpecialty>();
   readonly users = new Map<string, TestUser>();
   readonly patients = new Map<string, TestPatient>();
@@ -1539,6 +1586,15 @@ describe('Fase 5 — Matriz de Aceptación E2E (Bootstrap Real)', () => {
       };
       expect(createdPatient.email).toBeNull();
       patientId = createdPatient.id;
+      await request(app.getHttpServer())
+        .post('/medical-records/access/grant')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId,
+          doctorId,
+          reason: 'Asignación verificada para prueba clínica',
+        })
+        .expect(201);
 
       // Segundo paciente sin email para confirmar que no colisiona UNIQUE(email)
       await request(app.getHttpServer())
@@ -1689,7 +1745,7 @@ describe('Fase 5 — Matriz de Aceptación E2E (Bootstrap Real)', () => {
       }>;
       expect(records.length).toBe(2);
       const original = records.find((r) => r.id === mainRecordId);
-      expect(original?.attachments[0]).toContain('token=signed');
+      expect(original?.attachments[0]).toContain('/api/backend/medical-records/attachments/');
 
       // ADMIN consulta la bitácora de auditoría y verifica eventos sin filtración de notas clínicas
       const auditRes = await request(app.getHttpServer())

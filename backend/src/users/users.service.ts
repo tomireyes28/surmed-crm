@@ -177,6 +177,10 @@ export class UsersService {
         }
         assertNewPassword(data.password);
         updatePayload.password = await bcrypt.hash(data.password, 10);
+        await tx.recoveryToken.updateMany({
+          where: { userId: id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
         await (
           this.tokenRevocationService ?? new TokenRevocationService(this.prisma)
         ).revokeAllForUser(id, tx);
@@ -210,6 +214,10 @@ export class UsersService {
       await (
         this.tokenRevocationService ?? new TokenRevocationService(this.prisma)
       ).revokeAllForUser(id, tx);
+      await tx.recoveryToken.updateMany({
+        where: { userId: id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
       return await tx.user.update({
         where: { id },
         data: { isActive: false },

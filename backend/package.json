@@ -25,6 +25,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:postgres": "node test/integrity-postgres.cjs",
+    "test:security": "node test/security-postgres.cjs",
     "provision:admin": "ts-node prisma/provision-admin.ts",
     "import:inventory": "ts-node prisma/import-inventory.ts",
     "import:inventory:dry-run": "ts-node prisma/import-inventory.ts --dry-run",

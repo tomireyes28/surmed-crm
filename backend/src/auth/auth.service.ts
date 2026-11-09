@@ -11,8 +11,10 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import * as bcrypt from 'bcrypt';
 import { assertNewPassword, assertPasswordByteLimit } from './password-policy';
 import { serializable } from '../common/utils/transaction.util';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, createHash, randomUUID } from 'node:crypto';
 import { TokenRevocationService } from './token-revocation.service';
+import { AuditService } from '../audit/audit.service';
+import { IssueRecoveryDto, RedeemRecoveryDto } from './dto/recovery.dto';
 import { LoginRateLimitService } from './login-rate-limit.service';
 
 @Injectable()
@@ -29,7 +31,7 @@ export class AuthService {
     const { password } = loginDto;
     assertPasswordByteLimit(password);
 
-    this.loginRateLimitService?.assertAllowed(email, clientIp);
+    await this.loginRateLimitService?.assertAllowed(email, clientIp);
 
     return serializable(this.prisma, async (tx) => {
       const user = await tx.user.findUnique({
@@ -37,7 +39,6 @@ export class AuthService {
       });
 
       if (!user || !user.isActive) {
-        this.loginRateLimitService?.recordFailure(email, clientIp);
         throw new UnauthorizedException(
           'Credenciales incorrectas o usuario inactivo',
         );
@@ -45,11 +46,10 @@ export class AuthService {
 
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
-        this.loginRateLimitService?.recordFailure(email, clientIp);
         throw new UnauthorizedException('Credenciales incorrectas');
       }
 
-      this.loginRateLimitService?.reset(email, clientIp);
+      await this.loginRateLimitService?.reset(email);
 
       const jti = randomUUID();
       const payload = {
@@ -81,6 +81,84 @@ export class AuthService {
         backendToken,
       };
     });
+  }
+
+  async issueRecovery(dto: IssueRecoveryDto, actorId: string) {
+    const raw = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(raw).digest('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    await serializable(this.prisma, async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: dto.userId } });
+      if (!user || !user.isActive)
+        throw new BadRequestException(
+          'Usuario no disponible para recuperación.',
+        );
+      await tx.recoveryToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      await tx.recoveryToken.create({
+        data: { tokenHash, userId: user.id, expiresAt },
+      });
+      await new AuditService(this.prisma).record(
+        {
+          actorId,
+          action: 'RECOVERY_ISSUE',
+          resource: 'User',
+          resourceId: user.id,
+          reason: dto.reason,
+        },
+        tx,
+      );
+    });
+    return { token: raw, expiresAt };
+  }
+
+  async redeemRecovery(dto: RedeemRecoveryDto, clientIp?: string) {
+    assertNewPassword(dto.newPassword);
+    await this.loginRateLimitService?.assertAllowed(
+      `recovery:${clientIp ?? 'unknown'}`,
+      clientIp,
+    );
+    const tokenHash = createHash('sha256').update(dto.token).digest('hex');
+    const password = await bcrypt.hash(dto.newPassword, 10);
+    await serializable(this.prisma, async (tx) => {
+      const token = await tx.recoveryToken.findUnique({
+        where: { tokenHash },
+        include: { user: true },
+      });
+      if (
+        !token ||
+        token.usedAt ||
+        token.expiresAt <= new Date() ||
+        !token.user.isActive
+      )
+        throw new BadRequestException(
+          'El enlace es inválido o venció. Solicite uno nuevo al administrador.',
+        );
+      await tx.recoveryToken.update({
+        where: { tokenHash },
+        data: { usedAt: new Date() },
+      });
+      await tx.user.update({ where: { id: token.userId }, data: { password } });
+      await tx.recoveryToken.updateMany({
+        where: { userId: token.userId, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      await this.tokenRevocationService.revokeAllForUser(token.userId, tx);
+      await new AuditService(this.prisma).record(
+        {
+          actorId: token.userId,
+          action: 'RECOVERY_REDEEM',
+          resource: 'User',
+          resourceId: token.userId,
+        },
+        tx,
+      );
+    });
+    return {
+      message: 'Contraseña actualizada. Inicie sesión con su nueva clave.',
+    };
   }
 
   async logout(userId: string, jti?: string) {
@@ -146,6 +224,10 @@ export class AuthService {
         select: { id: true },
       });
 
+      await tx.recoveryToken.updateMany({
+        where: { userId, usedAt: null },
+        data: { usedAt: new Date() },
+      });
       await this.tokenRevocationService.revokeAllForUser(userId, tx);
 
       return { message: 'Contraseña actualizada correctamente' };

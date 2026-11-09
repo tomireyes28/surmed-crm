@@ -36,14 +36,17 @@ export class TokenRevocationService {
   async isRevoked(jti?: string, userId?: string): Promise<boolean> {
     // Tokens antiguos o sin sesión registrada exigen iniciar sesión otra vez.
     if (!jti || !userId) return true;
-    const session = await this.prisma.authSession.findUnique({
-      where: { jti },
+    const now = new Date();
+    const updated = await this.prisma.authSession.updateMany({
+      where: {
+        jti,
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: now },
+        lastSeenAt: { gt: new Date(now.getTime() - 30 * 60 * 1000) },
+      },
+      data: { lastSeenAt: now },
     });
-    return (
-      !session ||
-      session.userId !== userId ||
-      session.revokedAt !== null ||
-      session.expiresAt.getTime() <= Date.now()
-    );
+    return updated.count !== 1;
   }
 }

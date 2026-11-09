@@ -125,7 +125,9 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
       };
 
       const revocation = new TokenRevocationService(sessionStore() as never);
-      const rateLimit = new LoginRateLimitService();
+      const rateLimit = new LoginRateLimitService(
+        transactionalMock({} as never),
+      );
       const usersService = new UsersService(
         transactionalMock(prismaMock as never),
         revocation,
@@ -224,13 +226,11 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
             findUnique: jest.fn().mockResolvedValue({ isActive: true }),
           },
           user: {
-            findUnique: jest
-              .fn()
-              .mockResolvedValue({
-                role: 'MEDICO',
-                isActive: true,
-                specialties: [{ id: 'spec-1' }],
-              }),
+            findUnique: jest.fn().mockResolvedValue({
+              role: 'MEDICO',
+              isActive: true,
+              specialties: [{ id: 'spec-1' }],
+            }),
           },
           appointment: {
             findMany: jest.fn().mockResolvedValue([]),
@@ -288,7 +288,7 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
         ),
       ).toBe(true);
 
-      // Consultar historia clínica: MEDICO y ADMIN permitidos, RECEPCION bloqueado (403)
+      // Consultar historia clínica: solo MEDICO permitido, RECEPCION bloqueado (403)
       expect(
         rolesGuard.canActivate(
           buildExecutionContext(
@@ -315,7 +315,7 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
             'ADMIN',
           ),
         ),
-      ).toBe(true);
+      ).toBe(false);
     });
 
     it('la ficha administrativa GET /patients/:id no incluye medicalRecords', async () => {
@@ -347,16 +347,14 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
       const prismaMock = {
         patient: { count: jest.fn().mockResolvedValue(42) },
         invoice: {
-          findMany: jest
-            .fn()
-            .mockResolvedValue([
-              {
-                totalAmount: 150000,
-                status: 'PAID',
-                paidAt: new Date(),
-                createdAt: new Date(),
-              },
-            ]),
+          findMany: jest.fn().mockResolvedValue([
+            {
+              totalAmount: 150000,
+              status: 'PAID',
+              paidAt: new Date(),
+              createdAt: new Date(),
+            },
+          ]),
         },
       };
       const dashboardService = new DashboardService(prismaMock as never);
@@ -517,7 +515,9 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
     });
 
     it('limita intentos fallidos de login con 429 Too Many Requests', async () => {
-      const rateLimit = new LoginRateLimitService();
+      const rateLimit = new LoginRateLimitService(
+        transactionalMock({} as never),
+      );
       const prismaMock = {
         user: {
           findUnique: jest.fn().mockResolvedValue(null),

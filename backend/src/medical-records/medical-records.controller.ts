@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  StreamableFile,
   Request,
   UploadedFile,
   UseGuards,
@@ -23,13 +24,77 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import type { RequestWithUser } from '../auth/interfaces/auth.interface';
 import { MAX_CLINICAL_FILE_SIZE_BYTES } from '../storage/storage.service';
 import 'multer';
+import { ClinicalAccessService } from './clinical-access.service';
+import {
+  ClinicalAccessDto,
+  RevokeAttachmentDto,
+} from './dto/clinical-access.dto';
+import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('Historias Clínicas')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('medical-records')
 export class MedicalRecordsController {
-  constructor(private readonly medicalRecordsService: MedicalRecordsService) {}
+  constructor(
+    private readonly medicalRecordsService: MedicalRecordsService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  @Post('access/grant')
+  @Roles('ADMIN')
+  grant(@Body() dto: ClinicalAccessDto, @Request() req: RequestWithUser) {
+    return new ClinicalAccessService(this.prisma).manage(
+      dto.patientId,
+      dto.doctorId,
+      req.user!.id,
+      dto.reason,
+    );
+  }
+
+  @Post('access/revoke')
+  @Roles('ADMIN')
+  revoke(@Body() dto: ClinicalAccessDto, @Request() req: RequestWithUser) {
+    return new ClinicalAccessService(this.prisma).manage(
+      dto.patientId,
+      dto.doctorId,
+      req.user!.id,
+      dto.reason,
+      true,
+    );
+  }
+
+  @Get('attachments/:id/content')
+  @Roles('MEDICO')
+  async download(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Request() req: RequestWithUser,
+  ) {
+    const result = await this.medicalRecordsService.attachmentContent(
+      id,
+      req.user!.id,
+      req.user!.role,
+    );
+    return new StreamableFile(result.buffer, {
+      type: result.mimeType,
+      disposition: 'attachment; filename="estudio-clinico"',
+    });
+  }
+
+  @Post('attachments/:id/revoke')
+  @Roles('MEDICO')
+  revokeFile(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: RevokeAttachmentDto,
+    @Request() req: RequestWithUser,
+  ) {
+    return this.medicalRecordsService.revokeAttachment(
+      id,
+      req.user!.id,
+      req.user!.role,
+      dto.reason,
+    );
+  }
 
   @Post()
   @Roles('MEDICO')
@@ -71,7 +136,7 @@ export class MedicalRecordsController {
   }
 
   @Get('patient/:patientId')
-  @Roles('MEDICO', 'ADMIN')
+  @Roles('MEDICO')
   findByPatient(
     @Param('patientId', new ParseUUIDPipe()) patientId: string,
     @Request() req?: RequestWithUser,

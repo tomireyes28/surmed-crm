@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  ForbiddenException,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -14,6 +15,8 @@ import {
   CreateMedicalAddendumDto,
   CreateMedicalRecordDto,
 } from './dto/create-medical-record.dto';
+import { ClinicalAccessService } from './clinical-access.service';
+import { serializable } from '../common/utils/transaction.util';
 import { AuditService } from '../audit/audit.service';
 import 'multer';
 
@@ -31,6 +34,11 @@ export class MedicalRecordsService {
     file?: Express.Multer.File,
     actorRole: string = 'MEDICO',
   ) {
+    await new ClinicalAccessService(this.prisma).assertAccess(
+      dto.patientId,
+      doctorId,
+      actorRole,
+    );
     if (!dto.notes || dto.notes.trim().length < 3) {
       throw new BadRequestException(
         'La evolución clínica no puede estar vacía.',
@@ -80,6 +88,12 @@ export class MedicalRecordsService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        await new ClinicalAccessService(this.prisma).assertAccess(
+          dto.patientId,
+          doctorId,
+          actorRole,
+          tx,
+        );
         const created = await tx.medicalRecord.create({
           data: {
             patientId: dto.patientId,
@@ -195,6 +209,12 @@ export class MedicalRecordsService {
         );
       }
 
+      await new ClinicalAccessService(this.prisma).assertAccess(
+        parentRecord.patientId,
+        doctorId,
+        actorRole,
+        tx,
+      );
       const addendum = await tx.medicalRecord.create({
         data: {
           patientId: parentRecord.patientId,
@@ -231,6 +251,11 @@ export class MedicalRecordsService {
   }
 
   async findByPatient(patientId: string, actorId?: string, actorRole?: string) {
+    await new ClinicalAccessService(this.prisma).assertAccess(
+      patientId,
+      actorId,
+      actorRole,
+    );
     const patient = await this.prisma.patient.findUnique({
       where: { id: patientId },
       select: { id: true },
@@ -261,33 +286,144 @@ export class MedicalRecordsService {
       },
     });
 
-    return Promise.all(
-      records.map(async (record) => {
-        const signedResults = await Promise.all(
-          record.attachments.map(async (path) => {
-            if (typeof this.storage.getSignedUrlSafe === 'function') {
-              return await this.storage.getSignedUrlSafe(path);
-            }
-            try {
-              return await this.storage.getSignedUrl(path);
-            } catch {
-              return null;
-            }
-          }),
-        );
+    const files = await this.prisma.medicalAttachment.findMany({
+      where: { patientId },
+    });
+    // Preserve old studies without trusting unverified legacy paths. Validate them
+    // once under an authorized doctor's request; never recreate revoked metadata.
+    const knownPaths = new Set(files.map((file) => file.storagePath));
+    for (const record of records) {
+      for (const path of record.attachments) {
+        if (knownPaths.has(path)) continue;
+        try {
+          const buffer = await this.storage.downloadFile(path);
+          const ext = path.split('.').pop()?.toLowerCase() || '';
+          const mime: Record<string, string> = {
+            pdf: 'application/pdf',
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            png: 'image/png',
+            webp: 'image/webp',
+          };
+          const checked = this.storage.validateClinicalFile({
+            buffer,
+            size: buffer.length,
+            originalname: `adjunto.${ext}`,
+            mimetype: mime[ext] || '',
+          } as Express.Multer.File);
+          const file = await this.prisma.medicalAttachment.upsert({
+            where: { storagePath: path },
+            create: {
+              medicalRecordId: record.id,
+              patientId,
+              uploadedById: record.doctorId,
+              storagePath: path,
+              originalName: checked.originalName,
+              mimeType: checked.mimeType,
+              sizeBytes: checked.sizeBytes,
+              sha256: checked.sha256,
+              scanStatus: checked.scanStatus,
+            },
+            update: {},
+          });
+          if (
+            file.patientId === patientId &&
+            file.medicalRecordId === record.id
+          )
+            files.push(file);
+          knownPaths.add(path);
+        } catch {
+          Logger.warn(
+            'Adjunto histórico no disponible o no verificable; requiere conciliación.',
+            'MedicalRecordsService',
+          );
+        }
+      }
+    }
+    return records.map((record) => {
+      const visible = files.filter(
+        (file) =>
+          file.medicalRecordId === record.id &&
+          !file.isRevoked &&
+          file.scanStatus === 'CLEAN_MAGIC_VERIFIED',
+      );
+      return {
+        ...record,
+        attachments: visible.map(
+          (file) =>
+            `/api/backend/medical-records/attachments/${file.id}/content`,
+        ),
+        attachmentFiles: visible.map((file) => ({ id: file.id })),
+        missingAttachmentsCount: Math.max(
+          0,
+          record.attachments.length - visible.length,
+        ),
+      };
+    });
+  }
 
-        const validAttachments = signedResults.filter(
-          (url): url is string => typeof url === 'string' && url.length > 0,
+  async attachmentContent(id: string, actorId: string, role: string) {
+    return serializable(this.prisma, async (tx) => {
+      const file = await tx.medicalAttachment.findUnique({ where: { id } });
+      if (!file) throw new NotFoundException('Adjunto no disponible.');
+      await new ClinicalAccessService(this.prisma).assertAccess(
+        file.patientId,
+        actorId,
+        role,
+        tx,
+      );
+      if (file.isRevoked || file.scanStatus !== 'CLEAN_MAGIC_VERIFIED')
+        throw new ForbiddenException(
+          'Adjunto revocado o pendiente de verificación.',
         );
-        const missingAttachmentsCount =
-          record.attachments.length - validAttachments.length;
+      const downloaded = await this.storage.downloadFile(file.storagePath);
+      await new AuditService(this.prisma).record(
+        {
+          actorId,
+          actorRole: role,
+          action: 'MEDICAL_ATTACHMENT_READ',
+          resource: 'MedicalAttachment',
+          resourceId: id,
+          patientId: file.patientId,
+        },
+        tx,
+      );
+      return { buffer: downloaded, mimeType: file.mimeType };
+    });
+  }
 
-        return {
-          ...record,
-          attachments: validAttachments,
-          ...(missingAttachmentsCount > 0 ? { missingAttachmentsCount } : {}),
-        };
-      }),
-    );
+  async revokeAttachment(
+    id: string,
+    actorId: string,
+    role: string,
+    reason: string,
+  ) {
+    return serializable(this.prisma, async (tx) => {
+      const file = await tx.medicalAttachment.findUnique({ where: { id } });
+      if (!file) throw new NotFoundException('Adjunto no disponible.');
+      await new ClinicalAccessService(this.prisma).assertAccess(
+        file.patientId,
+        actorId,
+        role,
+        tx,
+      );
+      await tx.medicalAttachment.update({
+        where: { id },
+        data: { isRevoked: true },
+      });
+      await new AuditService(this.prisma).record(
+        {
+          actorId,
+          actorRole: role,
+          action: 'MEDICAL_ATTACHMENT_REVOKE',
+          resource: 'MedicalAttachment',
+          resourceId: id,
+          patientId: file.patientId,
+          reason,
+        },
+        tx,
+      );
+      return { message: 'Adjunto revocado.' };
+    });
   }
 }

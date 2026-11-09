@@ -122,7 +122,10 @@ async function main() {
     assert.equal(objects.size, 0);
     check('clinical audit failure rolls back history and metadata and compensates upload');
     const clinical = new MedicalRecordsService(db, storage);
-    await assert.rejects(clinical.create(note, randomUUID(), {}), e => e.code === 'P2003');
+    // Access now rejects an unknown doctor before upload. Inject an actual FK
+    // violation in the audit write to keep exercising PostgreSQL rollback.
+    const fkAudit = { record: (_input, tx) => tx.medicalRecord.create({ data: { patientId: randomUUID(), doctorId: d1.id, notes: 'Injected FK failure' } }) };
+    await assert.rejects(new MedicalRecordsService(db, storage, fkAudit).create(note, d1.id, {}), e => e.code === 'P2003');
     assert.equal(objects.size, 0);
     check('real foreign-key failure rolls back history and compensates upload');
     const created = await clinical.create(note, d1.id, {});

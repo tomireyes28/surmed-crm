@@ -177,6 +177,7 @@ export class StorageService {
     patientId: string,
   ): Promise<UploadedClinicalFileResult> {
     const metadata = this.validateClinicalFile(file);
+    await this.assertPrivateBucket();
     const objectKey = `${patientId}/${crypto.randomUUID()}.${metadata.canonicalExt}`;
 
     const { data, error } = await this.getClient()
@@ -220,10 +221,34 @@ export class StorageService {
       );
   }
 
+  private async assertPrivateBucket(): Promise<void> {
+    const { data, error } =
+      await this.getClient().storage.getBucket('medical-records');
+    if (error || !data || data.public !== false)
+      throw new InternalServerErrorException(
+        'El almacenamiento clínico debe ser privado y accesible al servidor.',
+      );
+  }
+
+  async downloadFile(path: string): Promise<Buffer> {
+    await this.assertPrivateBucket();
+    const { data, error } = await this.getClient()
+      .storage.from('medical-records')
+      .download(path);
+    if (error || !data)
+      throw new InternalServerErrorException(
+        'No se pudo recuperar el adjunto.',
+      );
+    if (data.size > MAX_CLINICAL_FILE_SIZE_BYTES)
+      throw new PayloadTooLargeException('Adjunto demasiado grande.');
+    return Buffer.from(await data.arrayBuffer());
+  }
+
   async getSignedUrl(
     path: string,
     expiresInSeconds: number = DEFAULT_SIGNED_URL_TTL_SECONDS,
   ): Promise<string> {
+    await this.assertPrivateBucket();
     const { data, error } = await this.getClient()
       .storage.from('medical-records')
       .createSignedUrl(path, expiresInSeconds);

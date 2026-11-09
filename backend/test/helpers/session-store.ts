@@ -7,41 +7,54 @@ export function sessionStore() {
     rows,
     authSession: {
       create: jest.fn(
-        async ({
+        ({
           data,
         }: {
           data: { jti: string; userId: string; expiresAt: Date };
         }) => {
-          if (rows.has(data.jti)) throw new Error('Duplicate session');
-          const row = { ...data, createdAt: new Date(), revokedAt: null };
+          if (rows.has(data.jti))
+            return Promise.reject(new Error('Duplicate session'));
+          const row = {
+            ...data,
+            createdAt: new Date(),
+            lastSeenAt: new Date(),
+            revokedAt: null,
+          };
           rows.set(data.jti, row);
-          return row;
+          return Promise.resolve(row);
         },
       ),
-      findUnique: jest.fn(
-        async ({ where }: { where: { jti: string } }) =>
-          rows.get(where.jti) ?? null,
+      findUnique: jest.fn(({ where }: { where: { jti: string } }) =>
+        Promise.resolve(rows.get(where.jti) ?? null),
       ),
       updateMany: jest.fn(
-        async ({
+        ({
           where,
           data,
         }: {
-          where: { jti?: string; userId?: string; revokedAt: null };
-          data: { revokedAt: Date };
+          where: {
+            jti?: string;
+            userId?: string;
+            revokedAt: null;
+            expiresAt?: { gt: Date };
+            lastSeenAt?: { gt: Date };
+          };
+          data: { revokedAt?: Date; lastSeenAt?: Date };
         }) => {
           let count = 0;
           for (const row of rows.values()) {
             if (
               (!where.jti || row.jti === where.jti) &&
               (!where.userId || row.userId === where.userId) &&
-              row.revokedAt === null
+              row.revokedAt === null &&
+              (!where.expiresAt || row.expiresAt > where.expiresAt.gt) &&
+              (!where.lastSeenAt || row.lastSeenAt > where.lastSeenAt.gt)
             ) {
-              row.revokedAt = data.revokedAt;
+              Object.assign(row, data);
               count++;
             }
           }
-          return { count };
+          return Promise.resolve({ count });
         },
       ),
     },

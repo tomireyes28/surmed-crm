@@ -1,3 +1,4 @@
+import { rateStore } from './rate-store';
 import { sessionStore } from './session-store';
 
 /** Unit doubles implement the transaction boundary; concurrency guarantees are
@@ -10,17 +11,38 @@ export function transactionalMock<T>(db: T): T {
     auditLog?: unknown;
     medicalAttachment?: unknown;
     authSession?: unknown;
+    authRateBucket?: unknown;
+    recoveryToken?: unknown;
+    clinicalAccess?: unknown;
+    user?: unknown;
   };
   const prepare = (value: typeof target) => {
     value.auditLog ??= {
-      create: jest.fn(async () => ({ id: 'synthetic-audit' })),
+      create: jest.fn().mockResolvedValue({ id: 'synthetic-audit' }),
     };
-    value.medicalAttachment ??= { findUnique: jest.fn(async () => null) };
+    value.medicalAttachment ??= {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    };
     value.authSession ??= sessionStore().authSession;
+    value.authRateBucket ??= rateStore().authRateBucket;
+    value.recoveryToken ??= {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    };
+    value.clinicalAccess ??= {
+      findUnique: jest.fn().mockResolvedValue({ revokedAt: null }),
+    };
+    value.user ??= {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ role: 'MEDICO', isActive: true }),
+    };
     return value;
   };
   prepare(target);
-  const original = target.$transaction?.bind(target);
+  const original = target.$transaction?.bind(
+    target,
+  ) as typeof target.$transaction;
   let tail = Promise.resolve();
   target.$transaction = async (work) => {
     const previous = tail;

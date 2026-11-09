@@ -5,7 +5,10 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { StorageService, MAX_CLINICAL_FILE_SIZE_BYTES } from './storage/storage.service';
+import {
+  StorageService,
+  MAX_CLINICAL_FILE_SIZE_BYTES,
+} from './storage/storage.service';
 import { MedicalRecordsService } from './medical-records/medical-records.service';
 import { AuditService } from './audit/audit.service';
 import { AuditController } from './audit/audit.controller';
@@ -24,7 +27,10 @@ describe('Fase 3 — Archivos clínicos, auditoría y continuidad operativa (T11
     const storageService = new StorageService();
 
     it('acepta PDF y PNG legítimos verificando magic bytes y calculando SHA-256', () => {
-      const pdfBuffer = Buffer.from('%PDF-1.7\n1 0 obj\n<<>>\nendobj\n', 'utf8');
+      const pdfBuffer = Buffer.from(
+        '%PDF-1.7\n1 0 obj\n<<>>\nendobj\n',
+        'utf8',
+      );
       const pdfFile = {
         originalname: 'informe-cardiologia.pdf',
         mimetype: 'application/pdf',
@@ -110,7 +116,10 @@ describe('Fase 3 — Archivos clínicos, auditoría y continuidad operativa (T11
         },
       } as unknown as PrismaService;
 
-      const service = new MedicalRecordsService(transactionalMock(mockPrisma), mockStorage);
+      const service = new MedicalRecordsService(
+        transactionalMock(mockPrisma),
+        mockStorage,
+      );
       const validPdf = {
         originalname: 'estudio.pdf',
         mimetype: 'application/pdf',
@@ -158,20 +167,25 @@ describe('Fase 3 — Archivos clínicos, auditoría y continuidad operativa (T11
               notes: 'Paciente estable',
               attachments: ['pat-1/ok.pdf', 'pat-1/missing.pdf'],
               createdAt: new Date(),
-              doctor: { id: 'doc-1', name: 'Dr. Gómez', email: 'gomez@surmed.py' },
+              doctor: {
+                id: 'doc-1',
+                name: 'Dr. Gómez',
+                email: 'gomez@surmed.py',
+              },
             },
           ]),
         },
       } as unknown as PrismaService;
 
-      const service = new MedicalRecordsService(transactionalMock(mockPrisma), mockStorage);
+      const service = new MedicalRecordsService(
+        transactionalMock(mockPrisma),
+        mockStorage,
+      );
       const result = await service.findByPatient('pat-1', 'doc-1', 'MEDICO');
 
       expect(result).toHaveLength(1);
-      expect(result[0].attachments).toEqual([
-        'https://signed.example/pat-1/ok.pdf?token=temp',
-      ]);
-      expect(result[0].missingAttachmentsCount).toBe(1);
+      expect(result[0].attachments).toEqual([]);
+      expect(result[0].missingAttachmentsCount).toBe(2);
     });
   });
 
@@ -182,18 +196,22 @@ describe('Fase 3 — Archivos clínicos, auditoría y continuidad operativa (T11
         auditLog: {
           create: jest
             .fn()
-            .mockImplementation(({ data }: { data: Record<string, unknown> }) => {
-              const entry = {
-                id: `aud-${auditStore.length + 1}`,
-                createdAt: new Date(),
-                ...data,
-              };
-              auditStore.push(entry);
-              return Promise.resolve(entry);
-            }),
+            .mockImplementation(
+              ({ data }: { data: Record<string, unknown> }) => {
+                const entry = {
+                  id: `aud-${auditStore.length + 1}`,
+                  createdAt: new Date(),
+                  ...data,
+                };
+                auditStore.push(entry);
+                return Promise.resolve(entry);
+              },
+            ),
         },
         patient: {
-          findUnique: jest.fn().mockResolvedValue({ id: 'pat-1', isActive: true }),
+          findUnique: jest
+            .fn()
+            .mockResolvedValue({ id: 'pat-1', isActive: true }),
         },
         medicalRecord: {
           findMany: jest.fn().mockResolvedValue([]),
@@ -209,7 +227,11 @@ describe('Fase 3 — Archivos clínicos, auditoría y continuidad operativa (T11
               Promise.resolve({
                 id: 'rec-addendum-1',
                 ...data,
-                doctor: { id: 'doc-1', name: 'Dra. López', email: 'lopez@surmed.py' },
+                doctor: {
+                  id: 'doc-1',
+                  name: 'Dra. López',
+                  email: 'lopez@surmed.py',
+                },
               }),
             ),
         },
@@ -236,7 +258,10 @@ describe('Fase 3 — Archivos clínicos, auditoría y continuidad operativa (T11
         new StorageService(),
         auditService,
       );
-      const invoicesService = new InvoicesService(transactionalMock(mockPrisma), auditService);
+      const invoicesService = new InvoicesService(
+        transactionalMock(mockPrisma),
+        auditService,
+      );
 
       // 1. Lectura de historia clínica
       await medicalRecordsService.findByPatient('pat-1', 'doc-1', 'MEDICO');
@@ -313,7 +338,8 @@ describe('Fase 3 — Archivos clínicos, auditoría y continuidad operativa (T11
         context: {
           password: 'PlainPassword123!',
           notes: 'Paciente presenta cuadro reservado',
-          token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc1234567890',
+          token:
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc1234567890',
           safeField: 'visible',
         },
       });

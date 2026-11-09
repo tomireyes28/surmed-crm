@@ -30,7 +30,11 @@ describe('Persistent sessions across service restarts', () => {
       const revocation = new TokenRevocationService(prisma as never);
       return {
         revocation,
-        auth: new AuthService(transactionalMock(prisma as never), jwt, revocation),
+        auth: new AuthService(
+          transactionalMock(prisma as never),
+          jwt,
+          revocation,
+        ),
         strategy: new JwtStrategy(
           prisma as never,
           new ConfigService({ JWT_SECRET: secret }),
@@ -117,7 +121,7 @@ describe('Persistent sessions across service restarts', () => {
     await expect(f.restart().auth.logout('user', 'jti')).rejects.toThrow(
       'database down',
     );
-    f.prisma.authSession.findUnique.mockRejectedValueOnce(
+    f.prisma.authSession.updateMany.mockRejectedValueOnce(
       new Error('database down'),
     );
     await expect(

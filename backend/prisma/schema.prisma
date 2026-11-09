@@ -21,6 +21,8 @@ model User {
   role           Role            @default(RECEPCION)
   isActive       Boolean         @default(true)
   sessions       AuthSession[]
+  clinicalAccess ClinicalAccess[]
+  recoveryTokens RecoveryToken[]
   
   medicalRecords MedicalRecord[] 
   stockMovements StockMovement[] 
@@ -41,6 +43,7 @@ model AuthSession {
   createdAt DateTime @default(now())
   expiresAt DateTime
   revokedAt DateTime?
+  lastSeenAt DateTime @default(now())
 
   @@index([userId, revokedAt])
   @@index([expiresAt])
@@ -62,11 +65,45 @@ model Patient {
   medicalRecords MedicalRecord[] 
   invoices       Invoice[]       
   appointments   Appointment[]
+  clinicalAccess ClinicalAccess[]
 
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
   @@map("patients")
+}
+
+model ClinicalAccess {
+  patientId String
+  doctorId String
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor User @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  grantedById String
+  reason String
+  grantedAt DateTime @default(now())
+  revokedAt DateTime?
+  @@id([patientId, doctorId])
+  @@map("clinical_access")
+}
+
+model RecoveryToken {
+  tokenHash String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("recovery_tokens")
+}
+
+model AuthRateBucket {
+  key String @id
+  count Int
+  expiresAt DateTime
+  @@index([expiresAt])
+  @@map("auth_rate_buckets")
 }
 
 model MedicalRecord {
