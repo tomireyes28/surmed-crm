@@ -1,5 +1,7 @@
 # Auditoría de Surmed y evaluación técnica
 
+> Estado histórico del 04/11/2026. Las correcciones posteriores y los pendientes actuales están revisados en [Estado y plan de cierre del 08/11/2026](../auditoria-2026-11-08/ESTADO-Y-PLAN-DE-CIERRE.md).
+
 Fecha: 4 de noviembre de 2026. Código revisado: `50c0e60b8e5a8807649b92c624f9db4b5620777d`.
 
 ## Dictamen

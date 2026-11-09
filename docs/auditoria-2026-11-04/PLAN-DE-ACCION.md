@@ -1,5 +1,7 @@
 # Plan de acción para Surmed
 
+> Revisión del 08/11/2026: este plan se conserva como historial. Sus casillas marcadas no acreditan por sí solas pruebas, despliegue o aceptación. Para el estado actual y trabajo pendiente, usar [Estado y plan de cierre](../auditoria-2026-11-08/ESTADO-Y-PLAN-DE-CIERRE.md).
+
 Fecha: 4 de noviembre de 2026. Basado en [la auditoría del código actual](INFORME.md). Estado inicial: tareas propuestas, ninguna corrección de aplicación implementada en esta revisión.
 
 ## Objetivo y orden

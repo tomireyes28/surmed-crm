@@ -1,0 +1,3 @@
+R01: fallo de auditoría elimina adjunto después de persistir la historia (dobles).
+R03: misma clave con otro paciente/contenido devuelve operación anterior sin conflicto (dobles).
+R02: dos instancias aceptan turnos superpuestos con un intercalado permitido (dobles, no prueba PostgreSQL).
