@@ -1,5 +1,7 @@
 # Surmed — API NestJS
 
+Preparación de producción y recuperación: [receta](../deploy/README.md), [evidencia etapa 4](../docs/auditoria-2026-11-09/ETAPA-4-PREPARACION.md). Comandos `backup:create`, `backup:restore-test`, `test:backup-drill`, `production:check` y `test:operations`; requieren las variables explícitas documentadas. Las copias/claves permanecen fuera de Git. El piloto se difiere hasta disponibilidad del centro.
+
 Backend privado con Prisma/PostgreSQL, sesiones persistentes y adjuntos en Supabase Storage privado. Requiere Node.js >=22. Configuración e instalación completa en [README raíz](../README.md); variables en [.env.example](.env.example).
 
 ```powershell

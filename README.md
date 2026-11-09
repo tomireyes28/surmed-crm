@@ -1,5 +1,7 @@
 # Surmed CRM — Sistema de Gestión Clínica y Administrativa
 
+**Estado de entrega:** preparación técnica con datos sintéticos; todavía sin publicación ni piloto. Ver [estado del proyecto](docs/ESTADO-DEL-PROYECTO.md), [recuperación y etapa 4](docs/auditoria-2026-11-09/ETAPA-4-PREPARACION.md) y [receta de producción](deploy/README.md). El piloto queda diferido hasta disponibilidad del centro.
+
 Sistema integral de gestión para el **Centro Médico Surmed (Asunción, Paraguay)** que unifica padrón de pacientes, agenda médica por especialidad, evoluciones clínicas con adjuntos privados, control de inventario de insumos y comprobantes internos de cobro.
 
 ---
@@ -169,4 +171,4 @@ npm run build
 
 Ver [etapa 3: cambios, pruebas y pendientes de entrega](docs/auditoria-2026-11-08/ETAPA-3-IMPLEMENTADA.md) y [procedimiento operativo](docs/auditoria-2026-11-04/OPERACION-Y-CONTINUIDAD.md).
 
-**Actualización del 09/11:** el proyecto Supabase restaurado se reconstruyó como entorno de pruebas y pasó la [integración real de base y adjuntos](docs/auditoria-2026-11-09/SUPABASE-STAGING.md). Tiene 13 migraciones, RLS y permisos cerrados a Data API, backend con rol limitado y Storage privado. Para ese entorno, ejecutar migraciones con `npx prisma migrate deploy --config prisma.migrate.config.ts`; la conexión administradora está separada de DATABASE_URL. Las credenciales no están en Git. La restauración de respaldo, el despliegue productivo y el piloto siguen pendientes.
+**Actualización del 09/11:** el proyecto Supabase restaurado se reconstruyó como entorno de pruebas y pasó la [integración real de base y adjuntos](docs/auditoria-2026-11-09/SUPABASE-STAGING.md). Tiene 13 migraciones, RLS y permisos cerrados a Data API, backend con rol limitado y Storage privado. Para ese entorno, ejecutar migraciones con `npx prisma migrate deploy --config prisma.migrate.config.ts`; la conexión administradora está separada de DATABASE_URL. Las credenciales no están en Git. También se verificó la [recuperación completa de datos sintéticos](docs/auditoria-2026-11-09/ETAPA-4-PREPARACION.md); despliegue productivo y piloto quedan diferidos.

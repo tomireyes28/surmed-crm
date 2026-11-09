@@ -1,0 +1,9 @@
+{
+  "date": "2026-11-09",
+  "checksPassed": 5,
+  "backendImageId": "sha256:5f4e5f77db3d03622e2ea8153c7e7f321379207cc6bf56a5bd441c599a179224",
+  "frontendImageId": "sha256:5a5367091c1549b9de818f12153e4605b5e517a7ba67984b45f8a47a02e661f6",
+  "environment": "local Docker Compose; restored synthetic PostgreSQL; real test Storage",
+  "publicDeployment": false,
+  "tlsAndPilotValidated": false
+}

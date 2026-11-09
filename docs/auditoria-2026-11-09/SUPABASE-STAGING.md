@@ -1,5 +1,7 @@
 # Supabase real — staging reconstruido y verificado
 
+> Seguimiento etapa 4: se realizó posteriormente un backup completo cifrado y su recuperación aislada con archivos reales de esta demo. Ver [resultado](ETAPA-4-PREPARACION.md). El reset inicial fue sin respaldo por autorización del usuario; el simulacro posterior sí conserva una copia sintética cifrada. Publicación y piloto continúan diferidos.
+
 Fecha: 9 de noviembre de 2026. Base del trabajo: `e3afa39`. Rama `codex/etapa-1-integridad`, sin push. El usuario confirmó que el proyecto restaurado contenía exclusivamente datos de prueba y autorizó reconstruirlo sin respaldo.
 
 ## Resultado aplicado

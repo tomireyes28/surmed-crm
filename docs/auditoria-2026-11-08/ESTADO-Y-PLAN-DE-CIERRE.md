@@ -1,5 +1,7 @@
 # Surmed: revisión actualizada y plan de cierre
 
+> Etapa 4, 09/11: recuperación completa de datos sintéticos y adjuntos verificada en aislado; imágenes de producción construidas y probadas. Ver [preparación/evidencia](../auditoria-2026-11-09/ETAPA-4-PREPARACION.md) y [receta de despliegue](../../deploy/README.md). Hosting, HTTPS real y aceptación operativa quedan diferidos: el centro todavía no puede realizar piloto. Los pendientes históricos de abajo se leen con estas actualizaciones.
+
 > Supabase real, 09/11: completada la reconstrucción autorizada de staging, permisos/RLS/rol limitado y 14 verificaciones con PostgreSQL y Storage reales. Ver [integración real y condiciones](../auditoria-2026-11-09/SUPABASE-STAGING.md). La revisión visual/PDF y la integración real de etapa 3 ya tienen evidencia; quedan las condiciones de operación/producción y aceptación de etapa 4.
 
 > Estado al 09/11/2026: realizada la revisión visual local de los tres roles y PDF, con correcciones verificadas en desarrollo y producción local. Ver [evidencia y alcance](../auditoria-2026-11-09/QA-VISUAL-Y-PDF.md). Para cerrar la entrega quedan staging/Supabase y condiciones operativas del piloto; el diagnóstico original de abajo es histórico.

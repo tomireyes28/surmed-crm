@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-09",
+  "checksPassed": 12,
+  "source": "synthetic Supabase staging; read only",
+  "target": "isolated PostgreSQL 17 and new private temporary Supabase bucket",
+  "encrypted": "AES-256-GCM; manifest and all payload entries authenticated",
+  "tables": 17,
+  "rows": 121,
+  "storageObjects": 4,
+  "revokedObjects": 2,
+  "orphanObjects": 0,
+  "backupElapsedMs": 8814,
+  "restoreElapsedMs": 4005,
+  "scope": "technical test only; not production RPO/RTO or pilot acceptance"
+}

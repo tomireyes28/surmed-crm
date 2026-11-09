@@ -1,6 +1,6 @@
 # Procedimiento Operativo, Archivos Clínicos, Backups y Continuidad (Fase 3 · T11, T12 y T13)
 
-Fecha de actualización: 8 de noviembre de 2026. Procedimiento propuesto; no acredita que el entorno del cliente haya sido desplegado, restaurado o aceptado.
+Fecha de actualización: 9 de noviembre de 2026. Recuperación técnica con datos sintéticos verificada: [etapa 4](../auditoria-2026-11-09/ETAPA-4-PREPARACION.md). El entorno del cliente todavía no está desplegado ni aceptado; piloto diferido. La contingencia y los objetivos operativos requieren validación del establecimiento.
 
 ---
 
@@ -56,24 +56,14 @@ Los siguientes valores son objetivos propuestos pendientes de aprobación por Su
 
 | Parámetro | Objetivo propuesto, no medido | Mecanismo |
 | :--- | :--- | :--- |
-| **RPO (Pérdida máxima tolerable de datos)** | **<= 24 horas** (base diaria) / **<= 1 hora** con WAL/PITR activo en el proveedor PostgreSQL | Respaldo diario automatizado + exportación previa a cada ventana de mantenimiento. |
-| **RTO (Tiempo objetivo de recuperación)** | **<= 2 horas** | Restauración de base PostgreSQL + verificación de objetos en Storage + despliegue reproducible (`npm ci && npx prisma migrate deploy && npm run build`). |
+| **RPO (Pérdida máxima tolerable de datos)** | **<= 24 horas**, pendiente de acuerdo. PITR puede mejorar el punto SQL, pero no recupera por sí solo archivos Storage. | Programar respaldo completo y custodia externa; todavía no configurado en producción. |
+| **RTO (Tiempo objetivo de recuperación)** | **<= 2 horas**, pendiente de medición productiva | Recuperar base y bytes, permisos, secretos, infraestructura y aplicación; validar antes de reabrir. |
 
 ### Procedimiento de respaldo (PostgreSQL + Storage)
-1. **Base de datos PostgreSQL (cifrada en reposo):**
-   ```bash
-   pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="backup_surmed_$(date +%Y%m%d_%H%M).dump"
-   ```
-2. **Restauración en ambiente aislado de prueba (nunca sobre producción activa):**
-   ```bash
-   pg_restore --clean --if-exists --no-owner --no-privileges --dbname="$ISOLATED_RESTORE_DATABASE_URL" "backup_surmed_YYYYMMDD_HHMM.dump"
-   ```
-3. **Conciliación automática entre registros PostgreSQL y objetos de Storage:**
-   ```bash
-   cd backend
-   DATABASE_URL="$ISOLATED_RESTORE_DATABASE_URL" npm run backup:verify
-   ```
-   - El script [`verify-backup-integrity.ts`](../../backend/prisma/verify-backup-integrity.ts) cruza todas las referencias de `medical_records` y `medical_attachments` contra los objetos existentes en el bucket `medical-records`, reportando cualquier archivo faltante (`missingInStorage`) u objeto huérfano (`orphanInStorage`) y devolviendo código de salida `1` ante discrepancias.
+1. Detener todas las instancias/escritores y usar la sesión de operaciones con conexión migradora separada, credenciales Storage y clave de cifrado. El runtime limitado no puede exportar el historial de migraciones. Ejecutar `npm run backup:create` con las variables de la [receta vigente](../../deploy/README.md).
+2. Copiar backup cifrado fuera del host/proyecto y custodiar la clave por separado. Un dump SQL no conserva los bytes de adjuntos; el comando exporta ambos. Sin manifiesto autenticado al final la copia está incompleta.
+3. Restaurar con `npm run backup:restore-test` únicamente en base local vacía y bucket privado temporal nuevo. Se autentican entradas, comparan todas las filas y hashes de archivos y reponen grants limitados. Producción remota requiere procedimiento revisado en entorno nuevo, nunca limpiar la base activa.
+4. `npm run backup:verify` concilia referencias y objetos, incluidos revocados, con paginación completa y error si falla Storage. No equivale a restaurar. El simulacro completo ya pasó con datos sintéticos; repetir con volumen/infraestructura del centro antes de operación real.
 
 ---
 
