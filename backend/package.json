@@ -27,6 +27,7 @@
     "test:postgres": "node test/integrity-postgres.cjs",
     "test:security": "node test/security-postgres.cjs",
     "test:delivery": "node test/delivery-postgres.cjs",
+    "test:visual": "node test/visual-fixture.cjs",
     "provision:admin": "ts-node prisma/provision-admin.ts",
     "import:inventory": "ts-node prisma/import-inventory.ts",
     "import:inventory:dry-run": "ts-node prisma/import-inventory.ts --dry-run",

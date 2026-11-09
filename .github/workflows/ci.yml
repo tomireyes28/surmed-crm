@@ -80,7 +80,7 @@ jobs:
       - name: Typecheck (Contratos API y Componentes)
         run: npm run typecheck
 
-      - name: Calendar and civil dates in different timezones
+      - name: Calendar, civil dates and invoice PDF regression
         run: npm test
 
       - name: Production Build

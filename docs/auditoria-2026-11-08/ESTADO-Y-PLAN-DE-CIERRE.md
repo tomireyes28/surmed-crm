@@ -1,5 +1,7 @@
 # Surmed: revisión actualizada y plan de cierre
 
+> Estado al 09/11/2026: realizada la revisión visual local de los tres roles y PDF, con correcciones verificadas en desarrollo y producción local. Ver [evidencia y alcance](../auditoria-2026-11-09/QA-VISUAL-Y-PDF.md). Para cerrar la entrega quedan staging/Supabase y condiciones operativas del piloto; el diagnóstico original de abajo es histórico.
+
 > Actualización posterior: la etapa 1 fue implementada y verificada. Ver [Etapa 1 implementada](ETAPA-1-IMPLEMENTADA.md) para cambios, resultados y condiciones de despliegue. Los hallazgos siguientes conservan el diagnóstico previo a esa implementación.
 
 > Etapa 2: política clínica y recuperación aprobadas por el usuario e implementadas, sesiones HttpOnly, límites persistentes y descargas revocables. Ver [Etapa 2 implementada](ETAPA-2-IMPLEMENTADA.md) para las pruebas ejecutadas y los pendientes operativos. El diagnóstico histórico de R04/R06 de abajo ya no describe el código actual. El próximo trabajo es la etapa 3; los privilegios del rol de base y las políticas reales de Supabase todavía requieren validación en staging.
