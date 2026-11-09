@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { createClient } from '@supabase/supabase-js';
+import { listObjects } from '../ops/backup-common.cjs';
 
 export interface StorageReconciliationReport {
   referencedPathsCount: number;
@@ -72,7 +73,8 @@ async function runCli() {
       }
     }
     for (const att of attachmentRows) {
-      if (!att.isRevoked && att.storagePath) {
+      // Revocation denies downloads; it does not remove the retained object.
+      if (att.storagePath) {
         referencedPaths.add(att.storagePath);
       }
     }
@@ -93,34 +95,15 @@ async function runCli() {
           2,
         ),
       );
+      process.exitCode = 1;
       return;
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const { data: rootFolders, error: rootErr } = await supabase.storage
-      .from('medical-records')
-      .list('', { limit: 1000 });
-
-    if (rootErr) {
-      throw new Error(`Error listando bucket medical-records: ${rootErr.message}`);
-    }
-
-    const storagePaths: string[] = [];
-    for (const entry of rootFolders ?? []) {
-      if (!entry.id) {
-        // Carpeta por paciente
-        const { data: children } = await supabase.storage
-          .from('medical-records')
-          .list(entry.name, { limit: 1000 });
-        for (const child of children ?? []) {
-          if (child.name) {
-            storagePaths.push(`${entry.name}/${child.name}`);
-          }
-        }
-      } else if (entry.name) {
-        storagePaths.push(entry.name);
-      }
-    }
+    const storagePaths: string[] = await listObjects(
+      supabase,
+      process.env.SUPABASE_MEDICAL_BUCKET || 'medical-records',
+    );
 
     const report = reconcileClinicalAttachments(
       Array.from(referencedPaths),

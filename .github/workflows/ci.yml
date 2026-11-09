@@ -51,6 +51,9 @@ jobs:
           npm run build
           test -f dist/main.js
 
+      - name: Production preflight and paginated Storage listing regression
+        run: npm run test:operations
+
       - name: Production Dependency Audit (Critical/High)
         run: npm audit --omit=dev --audit-level=high
 
@@ -88,6 +91,18 @@ jobs:
 
       - name: Production Dependency Audit (Critical/High)
         run: npm audit --omit=dev --audit-level=high
+
+  containers:
+    name: Build production images (no publish)
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend runtime without operational credentials
+        run: docker build --target runtime -t surmed-backend:ci backend
+      - name: Build Next standalone without runtime secrets
+        run: docker build -t surmed-frontend:ci frontend
 
   integration:
     name: PostgreSQL, migration upgrade and production BFF

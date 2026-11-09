@@ -89,6 +89,14 @@ export class StorageService {
 
   constructor(@Optional() private configService?: ConfigService) {}
 
+  private getBucketName(): string {
+    return (
+      this.configService?.get<string>('SUPABASE_MEDICAL_BUCKET') ??
+      process.env.SUPABASE_MEDICAL_BUCKET ??
+      'medical-records'
+    );
+  }
+
   private getClient(): SupabaseClient {
     if (this.supabaseClient) {
       return this.supabaseClient;
@@ -181,7 +189,7 @@ export class StorageService {
     const objectKey = `${patientId}/${crypto.randomUUID()}.${metadata.canonicalExt}`;
 
     const { data, error } = await this.getClient()
-      .storage.from('medical-records')
+      .storage.from(this.getBucketName())
       .upload(objectKey, file.buffer, {
         contentType: metadata.mimeType,
         upsert: false,
@@ -213,7 +221,7 @@ export class StorageService {
   async removeFile(path: string): Promise<void> {
     if (!path) return;
     const { error } = await this.getClient()
-      .storage.from('medical-records')
+      .storage.from(this.getBucketName())
       .remove([path]);
     if (error)
       throw new InternalServerErrorException(
@@ -222,8 +230,9 @@ export class StorageService {
   }
 
   private async assertPrivateBucket(): Promise<void> {
-    const { data, error } =
-      await this.getClient().storage.getBucket('medical-records');
+    const { data, error } = await this.getClient().storage.getBucket(
+      this.getBucketName(),
+    );
     if (error || !data || data.public !== false)
       throw new InternalServerErrorException(
         'El almacenamiento clínico debe ser privado y accesible al servidor.',
@@ -233,7 +242,7 @@ export class StorageService {
   async downloadFile(path: string): Promise<Buffer> {
     await this.assertPrivateBucket();
     const { data, error } = await this.getClient()
-      .storage.from('medical-records')
+      .storage.from(this.getBucketName())
       .download(path);
     if (error || !data)
       throw new InternalServerErrorException(
@@ -250,7 +259,7 @@ export class StorageService {
   ): Promise<string> {
     await this.assertPrivateBucket();
     const { data, error } = await this.getClient()
-      .storage.from('medical-records')
+      .storage.from(this.getBucketName())
       .createSignedUrl(path, expiresInSeconds);
 
     if (error || !data?.signedUrl) {

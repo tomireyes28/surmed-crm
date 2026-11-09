@@ -1,2 +1,4 @@
 /tmp/
 /output/
+/deploy/*.env
+/deploy/.env

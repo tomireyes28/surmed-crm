@@ -1,0 +1,7 @@
+# Optional host reverse proxy. Replace the reserved domain and configure DNS
+# before using. Only this proxy receives public 80/443; Compose binds loopback.
+crm.example.invalid {
+    encode zstd gzip
+    header Strict-Transport-Security "max-age=31536000"
+    reverse_proxy 127.0.0.1:3001
+}
