@@ -1,3 +1,4 @@
+import { transactionalMock } from '../../test/helpers/transactional-mock';
 import { assertNewPassword, assertPasswordByteLimit } from './password-policy';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
@@ -15,7 +16,7 @@ describe('Critical security regressions', () => {
 
   it('rejects oversized login passwords before querying credentials', async () => {
     const prisma = { user: { findUnique: jest.fn() } };
-    const auth = new AuthService(prisma as never, {} as never, {} as never);
+    const auth = new AuthService(transactionalMock(prisma as never), {} as never, {} as never);
     await expect(
       auth.login({ email: 'test@example.invalid', password: oversized }),
     ).rejects.toThrow('72 bytes');
@@ -24,7 +25,7 @@ describe('Critical security regressions', () => {
 
   it('rejects oversized password changes without updating or revoking accounts', async () => {
     const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } };
-    const auth = new AuthService(prisma as never, {} as never, {} as never);
+    const auth = new AuthService(transactionalMock(prisma as never), {} as never, {} as never);
     await expect(
       auth.changePassword('user', {
         currentPassword: 'Existing2026!',
@@ -42,7 +43,7 @@ describe('Critical security regressions', () => {
         update: jest.fn(),
       },
     };
-    const users = new UsersService(prisma as never);
+    const users = new UsersService(transactionalMock(prisma as never));
     await expect(
       users.create({
         email: 'test@example.invalid',
@@ -80,7 +81,7 @@ describe('Critical security regressions', () => {
     return {
       prisma,
       storage,
-      service: new MedicalRecordsService(prisma as never, storage as never),
+      service: new MedicalRecordsService(transactionalMock(prisma as never), storage as never),
     };
   }
 

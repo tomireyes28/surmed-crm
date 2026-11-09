@@ -7,6 +7,12 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { Appointment, AppointmentStatus, Prisma } from '@prisma/client';
+import { serializable } from '../common/utils/transaction.util';
+import {
+  idempotencyKey,
+  fingerprint,
+  assertReplay,
+} from '../common/utils/idempotency.util';
 import { parseClinicDateTime } from '../common/utils/timezone.util';
 
 export const APPOINTMENT_DOCTOR_SELECT = {
@@ -45,32 +51,7 @@ export interface AppointmentQueryFilters {
 
 @Injectable()
 export class AppointmentsService {
-  private readonly doctorLocks = new Map<string, Promise<unknown>>();
-
   constructor(private prisma: PrismaService) {}
-
-  private async withDoctorLock<T>(
-    doctorId: string,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const previous = this.doctorLocks.get(doctorId) ?? Promise.resolve();
-    let release!: () => void;
-    const current = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const chained = previous.then(() => current);
-    this.doctorLocks.set(doctorId, chained);
-
-    await previous.catch(() => undefined);
-    try {
-      return await fn();
-    } finally {
-      release();
-      if (this.doctorLocks.get(doctorId) === chained) {
-        this.doctorLocks.delete(doctorId);
-      }
-    }
-  }
 
   private intervalsOverlap(
     startA: Date,
@@ -86,162 +67,93 @@ export class AppointmentsService {
   async create(
     dto: CreateAppointmentDto,
     idempotencyHeader?: string,
+    actorId?: string,
   ): Promise<Appointment> {
-    const appointmentDate = parseClinicDateTime(dto.date);
+    const date = parseClinicDateTime(dto.date);
     const duration = dto.duration ?? 30;
-
     if (!Number.isInteger(duration) || duration < 15 || duration > 240) {
       throw new BadRequestException(
-        'La duración del turno debe ser un entero entre 15 y 240 minutos.',
+        'La duración debe ser un entero entre 15 y 240 minutos.',
       );
     }
-
-    const effectiveKey =
-      (dto.idempotencyKey ?? idempotencyHeader)?.trim() || undefined;
-
-    return this.withDoctorLock(dto.doctorId, async () => {
-      const executeCreate = async (tx: PrismaService) => {
-        if (effectiveKey && typeof tx.appointment?.findUnique === 'function') {
-          const existingByKey = await tx.appointment.findUnique({
-            where: { idempotencyKey: effectiveKey },
-            include: {
-              patient: true,
-              doctor: { select: APPOINTMENT_DOCTOR_SELECT },
-              specialty: true,
-            },
+    const key = idempotencyKey(dto.idempotencyKey, idempotencyHeader);
+    const requestFingerprint = fingerprint('appointment.create', actorId, {
+      patientId: dto.patientId,
+      doctorId: dto.doctorId,
+      specialtyId: dto.specialtyId,
+      date: date.toISOString(),
+      duration,
+      notes: dto.notes?.trim() || '',
+    });
+    const include = {
+      patient: true,
+      doctor: { select: APPOINTMENT_DOCTOR_SELECT },
+      specialty: true,
+    };
+    return serializable(
+      this.prisma,
+      async (tx) => {
+        if (key) {
+          const existing = await tx.appointment.findUnique({
+            where: { idempotencyKey: key },
+            include,
           });
-          if (existingByKey) {
-            return existingByKey;
+          if (existing) {
+            assertReplay(existing.requestFingerprint, requestFingerprint);
+            return existing;
           }
         }
-
-        // 1. Validar paciente activo (si el mock/base provee patient.findUnique)
-        if (typeof tx.patient?.findUnique === 'function') {
-          const patient = await tx.patient.findUnique({
-            where: { id: dto.patientId },
-          });
-          if (!patient) {
-            throw new NotFoundException('Paciente no encontrado');
-          }
-          if (patient.isActive === false) {
-            throw new BadRequestException(
-              'No se puede agendar un turno para un paciente archivado/inactivo.',
-            );
-          }
-        }
-
-        // 2. Validar médico activo, rol MEDICO y pertenencia a la especialidad (F06 / T09)
-        if (typeof tx.user?.findUnique === 'function') {
-          const doctor = (await tx.user.findUnique({
-            where: { id: dto.doctorId },
-            include: { specialties: true },
-          })) as
-            | {
-                id: string;
-                role: string;
-                isActive?: boolean;
-                specialties?: Array<{ id: string }>;
-              }
-            | null;
-
-          if (!doctor) {
-            throw new NotFoundException('Médico no encontrado');
-          }
-          if (doctor.isActive === false) {
-            throw new BadRequestException(
-              'El médico seleccionado se encuentra inactivo.',
-            );
-          }
-          if (doctor.role !== 'MEDICO') {
-            throw new BadRequestException(
-              'El usuario seleccionado no posee el rol MEDICO y no puede recibir turnos.',
-            );
-          }
-          if (
-            Array.isArray(doctor.specialties) &&
-            !doctor.specialties.some((s) => s.id === dto.specialtyId)
-          ) {
-            throw new BadRequestException(
-              'El médico seleccionado no atiende la especialidad indicada.',
-            );
-          }
-        }
-
-        // 3. Validar solapamiento de intervalos para el médico y para el paciente (F06 / T09)
-        if (typeof tx.appointment?.findMany === 'function') {
-          const windowStart = new Date(
-            appointmentDate.getTime() - 24 * 60 * 60_000,
+        const patient = await tx.patient.findUnique({
+          where: { id: dto.patientId },
+        });
+        if (!patient || !patient.isActive)
+          throw new NotFoundException('Paciente no encontrado o inactivo');
+        const doctor = await tx.user.findUnique({
+          where: { id: dto.doctorId },
+          include: { specialties: true },
+        });
+        if (!doctor || !doctor.isActive || doctor.role !== 'MEDICO')
+          throw new BadRequestException(
+            'El médico no está activo o no posee rol MEDICO.',
           );
-          const windowEnd = new Date(
-            appointmentDate.getTime() + (duration + 24 * 60) * 60_000,
+        if (!doctor.specialties.some((s) => s.id === dto.specialtyId))
+          throw new BadRequestException(
+            'El médico no atiende la especialidad indicada.',
           );
-
-          const nearbyAppointments = await tx.appointment.findMany({
-            where: {
-              status: { not: 'CANCELLED' },
-              date: {
-                gte: windowStart,
-                lte: windowEnd,
-              },
-              OR: [{ doctorId: dto.doctorId }, { patientId: dto.patientId }],
+        const nearby = await tx.appointment.findMany({
+          where: {
+            status: { not: 'CANCELLED' },
+            date: {
+              gte: new Date(date.getTime() - 240 * 60000),
+              lt: new Date(date.getTime() + duration * 60000),
             },
-          });
-
-          for (const existing of nearbyAppointments ?? []) {
-            if (existing.status === 'CANCELLED') continue;
-            const existingStart = new Date(existing.date);
-            const existingDuration = existing.duration || 30;
-
-            if (
-              this.intervalsOverlap(
-                appointmentDate,
-                duration,
-                existingStart,
-                existingDuration,
-              )
-            ) {
-              if (existing.doctorId === dto.doctorId) {
-                throw new ConflictException(
-                  'El médico ya tiene un turno asignado que se superpone con ese horario.',
-                );
-              }
-              if (existing.patientId === dto.patientId) {
-                throw new ConflictException(
-                  'El paciente ya tiene otro turno asignado en ese mismo horario.',
-                );
-              }
-            }
-          }
+            OR: [{ doctorId: dto.doctorId }, { patientId: dto.patientId }],
+          },
+        });
+        if (
+          nearby.some((a) =>
+            this.intervalsOverlap(date, duration, a.date, a.duration),
+          )
+        ) {
+          throw new ConflictException(
+            'El médico o paciente tiene un turno que se superpone con ese horario.',
+          );
         }
-
         return tx.appointment.create({
           data: {
             patientId: dto.patientId,
             doctorId: dto.doctorId,
             specialtyId: dto.specialtyId,
-            date: appointmentDate,
+            date,
             duration,
             notes: dto.notes?.trim() || undefined,
-            ...(effectiveKey ? { idempotencyKey: effectiveKey } : {}),
+            ...(key ? { idempotencyKey: key, requestFingerprint } : {}),
           },
-          include: {
-            patient: true,
-            doctor: {
-              select: APPOINTMENT_DOCTOR_SELECT,
-            },
-            specialty: true,
-          },
+          include,
         });
-      };
-
-      if (typeof this.prisma.$transaction === 'function') {
-        return await this.prisma.$transaction(async (tx) =>
-          executeCreate(tx as unknown as PrismaService),
-        );
-      }
-
-      return await executeCreate(this.prisma);
-    });
+      },
+      Boolean(key),
+    );
   }
 
   async findAll(filters?: AppointmentQueryFilters): Promise<Appointment[]> {
@@ -296,39 +208,26 @@ export class AppointmentsService {
     status: AppointmentStatus,
     cancelReason?: string,
   ): Promise<Appointment> {
-    if (!VALID_APPOINTMENT_STATUSES.has(status)) {
-      throw new BadRequestException('El estado de turno indicado no es válido.');
-    }
-
-    if (typeof this.prisma.appointment?.findUnique === 'function') {
-      const existing = await this.prisma.appointment.findUnique({
+    if (!VALID_APPOINTMENT_STATUSES.has(status))
+      throw new BadRequestException(
+        'El estado de turno indicado no es válido.',
+      );
+    return serializable(this.prisma, async (tx) => {
+      const existing = await tx.appointment.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException('Turno no encontrado');
+      if (existing.status === status) return existing;
+      if (!ALLOWED_APPOINTMENT_TRANSITIONS[existing.status].includes(status)) {
+        throw new ConflictException('Transición de estado no permitida.');
+      }
+      return tx.appointment.update({
         where: { id },
+        data: {
+          status,
+          ...(status === 'CANCELLED'
+            ? { cancelReason: cancelReason?.trim() || null }
+            : {}),
+        },
       });
-
-      if (!existing) {
-        throw new NotFoundException('Turno no encontrado');
-      }
-
-      if (existing.status === status) {
-        return existing;
-      }
-
-      const allowedTargets = ALLOWED_APPOINTMENT_TRANSITIONS[existing.status] ?? [];
-      if (!allowedTargets.includes(status)) {
-        throw new ConflictException(
-          `Transición de estado no permitida: no se puede cambiar un turno de ${existing.status} a ${status}.`,
-        );
-      }
-    }
-
-    return this.prisma.appointment.update({
-      where: { id },
-      data: {
-        status,
-        ...(status === 'CANCELLED' && cancelReason?.trim()
-          ? { cancelReason: cancelReason.trim() }
-          : {}),
-      },
     });
   }
 }

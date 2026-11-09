@@ -174,6 +174,7 @@ model StockMovement {
   quantity       Int      
   notes          String?
   idempotencyKey String?      @unique
+  requestFingerprint String?
   
   createdAt      DateTime     @default(now())
 
@@ -200,6 +201,7 @@ model Invoice {
   cancelledById  String?
   cancelReason   String?
   idempotencyKey String?       @unique
+  requestFingerprint String?
 
   items          InvoiceItem[]
 
@@ -274,6 +276,7 @@ model Appointment {
   notes          String?           @db.Text
   cancelReason   String?
   idempotencyKey String?           @unique
+  requestFingerprint String?
   
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt

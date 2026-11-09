@@ -1,3 +1,4 @@
+import { transactionalMock } from '../test/helpers/transactional-mock';
 import { BadRequestException } from '@nestjs/common';
 import {
   parseBooleanQuery,
@@ -131,7 +132,7 @@ describe('Fase 4 — Pulido, Validación de Consultas, Reactivación y Edad Civi
         prismaMock as unknown as PrismaService,
       );
       const usersService = new UsersService(
-        prismaMock as unknown as PrismaService,
+        transactionalMock(prismaMock as unknown as PrismaService),
       );
 
       const reactivatedProduct =
@@ -168,7 +169,7 @@ describe('Fase 4 — Pulido, Validación de Consultas, Reactivación y Edad Civi
       };
 
       const service = new InvoicesService(
-        prismaMock as unknown as PrismaService,
+        transactionalMock(prismaMock as unknown as PrismaService),
       );
 
       await service.findAll(undefined, 1, 10, undefined, '2026', '', 'PAID');

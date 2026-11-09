@@ -53,10 +53,7 @@ const ALLOWED_SIGNATURES: readonly AllowedMimeSignature[] = [
     extensions: ['jpg', 'jpeg'],
     // JPEG SOI + marker (0xFF 0xD8 0xFF)
     matchesMagic: (buf) =>
-      buf.length >= 3 &&
-      buf[0] === 0xff &&
-      buf[1] === 0xd8 &&
-      buf[2] === 0xff,
+      buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff,
   },
   {
     mimeType: 'image/png',
@@ -118,9 +115,13 @@ export class StorageService {
    * Valida tamaño, extensión, MIME y firma real de bytes (magic bytes) del archivo clínico,
    * y calcula su hash criptográfico SHA-256 (T11 / S07).
    */
-  validateClinicalFile(file: Express.Multer.File): ValidatedClinicalFileMetadata {
+  validateClinicalFile(
+    file: Express.Multer.File,
+  ): ValidatedClinicalFileMetadata {
     if (!file || !Buffer.isBuffer(file.buffer)) {
-      throw new BadRequestException('El archivo adjunto es inválido o está vacío.');
+      throw new BadRequestException(
+        'El archivo adjunto es inválido o está vacío.',
+      );
     }
 
     const sizeBytes = file.size ?? file.buffer.length;
@@ -141,8 +142,7 @@ export class StorageService {
     const declaredMime = (file.mimetype || '').toLowerCase();
 
     const spec = ALLOWED_SIGNATURES.find(
-      (item) =>
-        item.mimeType === declaredMime && item.extensions.includes(ext),
+      (item) => item.mimeType === declaredMime && item.extensions.includes(ext),
     );
 
     if (!spec) {
@@ -211,11 +211,13 @@ export class StorageService {
    */
   async removeFile(path: string): Promise<void> {
     if (!path) return;
-    try {
-      await this.getClient().storage.from('medical-records').remove([path]);
-    } catch {
-      // No propagar excepción secundaria durante compensación
-    }
+    const { error } = await this.getClient()
+      .storage.from('medical-records')
+      .remove([path]);
+    if (error)
+      throw new InternalServerErrorException(
+        'No se pudo eliminar el adjunto durante la compensación.',
+      );
   }
 
   async getSignedUrl(

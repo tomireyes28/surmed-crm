@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Request,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -18,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Appointment, AppointmentStatus } from '@prisma/client';
+import type { RequestWithUser } from '../auth/interfaces/auth.interface';
 
 @ApiTags('Turnos')
 @ApiBearerAuth()
@@ -31,10 +33,12 @@ export class AppointmentsController {
   async create(
     @Body() createAppointmentDto: CreateAppointmentDto,
     @Headers('idempotency-key') idempotencyHeader?: string,
+    @Request() req?: RequestWithUser,
   ): Promise<Appointment> {
     return this.appointmentsService.create(
       createAppointmentDto,
       idempotencyHeader,
+      req?.user?.id,
     );
   }
 

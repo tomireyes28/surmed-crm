@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -78,65 +79,92 @@ export class MedicalRecordsService {
     }
 
     try {
-      const created = await this.prisma.medicalRecord.create({
-        data: {
-          patientId: dto.patientId,
-          doctorId,
-          notes: dto.notes.trim(),
-          attachments: attachmentPath ? [attachmentPath] : [],
-          ...(dto.parentRecordId ? { parentRecordId: dto.parentRecordId } : {}),
-          ...(uploadedMetadata
-            ? {
-                attachmentFiles: {
-                  create: [
-                    {
-                      patientId: dto.patientId,
-                      uploadedById: doctorId,
-                      storagePath: uploadedMetadata.storagePath,
-                      originalName: uploadedMetadata.originalName,
-                      mimeType: uploadedMetadata.mimeType,
-                      sizeBytes: uploadedMetadata.sizeBytes,
-                      sha256: uploadedMetadata.sha256,
-                      scanStatus: uploadedMetadata.scanStatus,
-                    },
-                  ],
-                },
-              }
-            : {}),
-        },
-        include: {
-          doctor: {
-            select: { id: true, name: true, email: true },
+      return await this.prisma.$transaction(async (tx) => {
+        const created = await tx.medicalRecord.create({
+          data: {
+            patientId: dto.patientId,
+            doctorId,
+            notes: dto.notes.trim(),
+            attachments: attachmentPath ? [attachmentPath] : [],
+            ...(dto.parentRecordId
+              ? { parentRecordId: dto.parentRecordId }
+              : {}),
+            ...(uploadedMetadata
+              ? {
+                  attachmentFiles: {
+                    create: [
+                      {
+                        patientId: dto.patientId,
+                        uploadedById: doctorId,
+                        storagePath: uploadedMetadata.storagePath,
+                        originalName: uploadedMetadata.originalName,
+                        mimeType: uploadedMetadata.mimeType,
+                        sizeBytes: uploadedMetadata.sizeBytes,
+                        sha256: uploadedMetadata.sha256,
+                        scanStatus: uploadedMetadata.scanStatus,
+                      },
+                    ],
+                  },
+                }
+              : {}),
           },
-        },
-      });
+          include: {
+            doctor: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
 
-      await this.auditService?.record({
-        actorId: doctorId,
-        actorRole,
-        action: dto.parentRecordId
-          ? 'MEDICAL_RECORD_ADDENDUM'
-          : 'MEDICAL_RECORD_CREATE',
-        resource: 'MedicalRecord',
-        resourceId: created.id,
-        patientId: dto.patientId,
-        metadata: {
-          hasAttachment: Boolean(attachmentPath),
-          ...(uploadedMetadata
-            ? {
-                attachmentMimeType: uploadedMetadata.mimeType,
-                attachmentSizeBytes: uploadedMetadata.sizeBytes,
-                attachmentSha256: uploadedMetadata.sha256,
-              }
-            : {}),
-        },
-      });
+        await (this.auditService ?? new AuditService(this.prisma)).record(
+          {
+            actorId: doctorId,
+            actorRole,
+            action: dto.parentRecordId
+              ? 'MEDICAL_RECORD_ADDENDUM'
+              : 'MEDICAL_RECORD_CREATE',
+            resource: 'MedicalRecord',
+            resourceId: created.id,
+            patientId: dto.patientId,
+            metadata: {
+              hasAttachment: Boolean(attachmentPath),
+              ...(uploadedMetadata
+                ? {
+                    attachmentMimeType: uploadedMetadata.mimeType,
+                    attachmentSizeBytes: uploadedMetadata.sizeBytes,
+                    attachmentSha256: uploadedMetadata.sha256,
+                  }
+                : {}),
+            },
+          },
+          tx,
+        );
 
-      return created;
+        return created;
+      });
     } catch (error) {
       // Compensación de subida: si falla la persistencia en base de datos, eliminar el objeto en Storage para no dejar huérfanos (T11 / S07)
       if (attachmentPath && typeof this.storage.removeFile === 'function') {
-        await this.storage.removeFile(attachmentPath);
+        try {
+          // A commit acknowledgement can fail after PostgreSQL committed. Never delete
+          // an object referenced by a committed record; preserve it if DB is unavailable.
+          const committed = await this.prisma.medicalAttachment.findUnique({
+            where: { storagePath: attachmentPath },
+          });
+          if (committed) {
+            return await this.prisma.medicalRecord.findUniqueOrThrow({
+              where: { id: committed.medicalRecordId },
+              include: {
+                doctor: { select: { id: true, name: true, email: true } },
+              },
+            });
+          }
+          await this.storage.removeFile(attachmentPath);
+        } catch {
+          Logger.error(
+            'No se pudo confirmar o compensar un adjunto; requiere conciliación de almacenamiento.',
+            'MedicalRecordsService',
+          );
+        }
       }
       throw error;
     }
@@ -156,45 +184,50 @@ export class MedicalRecordsService {
       throw new BadRequestException('El texto de la adenda es obligatorio.');
     }
 
-    const parentRecord = await this.prisma.medicalRecord.findUnique({
-      where: { id: parentRecordId },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const parentRecord = await tx.medicalRecord.findUnique({
+        where: { id: parentRecordId },
+      });
 
-    if (!parentRecord) {
-      throw new NotFoundException(
-        'La evolución clínica original no fue encontrada.',
-      );
-    }
+      if (!parentRecord) {
+        throw new NotFoundException(
+          'La evolución clínica original no fue encontrada.',
+        );
+      }
 
-    const addendum = await this.prisma.medicalRecord.create({
-      data: {
-        patientId: parentRecord.patientId,
-        doctorId,
-        parentRecordId,
-        notes: dto.notes.trim(),
-        attachments: [],
-      },
-      include: {
-        doctor: {
-          select: { id: true, name: true, email: true },
+      const addendum = await tx.medicalRecord.create({
+        data: {
+          patientId: parentRecord.patientId,
+          doctorId,
+          parentRecordId,
+          notes: dto.notes.trim(),
+          attachments: [],
         },
-      },
-    });
+        include: {
+          doctor: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      });
 
-    await this.auditService?.record({
-      actorId: doctorId,
-      actorRole,
-      action: 'MEDICAL_RECORD_ADDENDUM',
-      resource: 'MedicalRecord',
-      resourceId: addendum.id,
-      patientId: parentRecord.patientId,
-      reason: dto.reason,
-      metadata: {
-        parentRecordId,
-      },
-    });
+      await (this.auditService ?? new AuditService(this.prisma)).record(
+        {
+          actorId: doctorId,
+          actorRole,
+          action: 'MEDICAL_RECORD_ADDENDUM',
+          resource: 'MedicalRecord',
+          resourceId: addendum.id,
+          patientId: parentRecord.patientId,
+          reason: dto.reason,
+          metadata: {
+            parentRecordId,
+          },
+        },
+        tx,
+      );
 
-    return addendum;
+      return addendum;
+    });
   }
 
   async findByPatient(patientId: string, actorId?: string, actorRole?: string) {

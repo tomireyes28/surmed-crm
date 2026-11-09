@@ -74,6 +74,7 @@ interface TestAppointment {
   notes: string | null;
   cancelReason: string | null;
   idempotencyKey: string | null;
+  requestFingerprint?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -99,6 +100,7 @@ interface TestStockMovement {
   quantity: number;
   notes: string | null;
   idempotencyKey: string | null;
+  requestFingerprint?: string | null;
   createdAt: Date;
 }
 
@@ -123,6 +125,7 @@ interface TestInvoice {
   cancelledById: string | null;
   cancelReason: string | null;
   idempotencyKey: string | null;
+  requestFingerprint?: string | null;
   items: TestInvoiceItem[];
   createdAt: Date;
   updatedAt: Date;
@@ -149,6 +152,7 @@ interface TestAuditLog {
  */
 class DisposableInMemoryPrisma {
   readonly authSession = sessionStore().authSession;
+  readonly medicalAttachment = { findUnique: jest.fn().mockResolvedValue(null) };
   readonly specialties = new Map<string, TestSpecialty>();
   readonly users = new Map<string, TestUser>();
   readonly patients = new Map<string, TestPatient>();
@@ -658,6 +662,7 @@ class DisposableInMemoryPrisma {
             duration: number;
             notes?: string;
             idempotencyKey?: string;
+    requestFingerprint?: string;
           };
         }) => {
           const now = new Date();
@@ -672,6 +677,7 @@ class DisposableInMemoryPrisma {
             notes: args.data.notes ?? null,
             cancelReason: null,
             idempotencyKey: args.data.idempotencyKey ?? null,
+            requestFingerprint: args.data.requestFingerprint ?? null,
             createdAt: now,
             updatedAt: now,
           };
@@ -878,6 +884,7 @@ class DisposableInMemoryPrisma {
             quantity: number;
             notes?: string;
             idempotencyKey?: string;
+    requestFingerprint?: string;
           };
         }) => {
           const created: TestStockMovement = {
@@ -888,6 +895,7 @@ class DisposableInMemoryPrisma {
             quantity: args.data.quantity,
             notes: args.data.notes ?? null,
             idempotencyKey: args.data.idempotencyKey ?? null,
+            requestFingerprint: args.data.requestFingerprint ?? null,
             createdAt: new Date(),
           };
           this.stockMovements.set(created.id, created);
@@ -957,6 +965,7 @@ class DisposableInMemoryPrisma {
             paidAt?: Date;
             paidById?: string;
             idempotencyKey?: string;
+    requestFingerprint?: string;
             items: {
               create: Array<{
                 description: string;
@@ -989,6 +998,7 @@ class DisposableInMemoryPrisma {
             cancelledById: null,
             cancelReason: null,
             idempotencyKey: args.data.idempotencyKey ?? null,
+            requestFingerprint: args.data.requestFingerprint ?? null,
             items,
             createdAt: now,
             updatedAt: now,
@@ -1774,6 +1784,7 @@ describe('Fase 5 — Matriz de Aceptación E2E (Bootstrap Real)', () => {
           specialtyId: specialtyCardioId,
           date: '2026-11-10T09:00',
           duration: 30,
+          notes: 'Control anual',
         })
         .expect(201);
       expect((retryRes.body as { id: string }).id).toBe(appointmentId);
@@ -2019,17 +2030,24 @@ describe('Fase 5 — Matriz de Aceptación E2E (Bootstrap Real)', () => {
         monthlyIssued: 250000,
       });
 
-      // 4. Anular comprobante (`PATCH /invoices/:id/cancel`) -> descuenta de KPIs y deja traza en AuditLog
-      const cancelRes = await request(app.getHttpServer())
+      // Paid receipts require a separate refund process, not cancellation.
+      await request(app.getHttpServer())
         .patch(`/invoices/${invoiceId}/cancel`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ reason: 'Error de carga en recepción' })
-        .expect(200);
+        .send({ reason: 'No debe borrar un pago' }).expect(409);
+      const pendingForCancel = await request(app.getHttpServer())
+        .post('/invoices').set('Authorization', `Bearer ${recepcionToken}`)
+        .send({ patientId, items: [{ description: 'Consulta pendiente', quantity: 1, unitPrice: 100 }] }).expect(201);
+      const cancelledId = (pendingForCancel.body as { id: string }).id;
+      const cancelRes = await request(app.getHttpServer())
+        .patch(`/invoices/${cancelledId}/cancel`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ reason: 'Error de carga en recepción' }).expect(200);
       expect((cancelRes.body as { status: string }).status).toBe('CANCELLED');
 
       // Intentar cobrar una factura anulada -> 409 Conflict
       await request(app.getHttpServer())
-        .patch(`/invoices/${invoiceId}/pay`)
+        .patch(`/invoices/${cancelledId}/pay`)
         .set('Authorization', `Bearer ${recepcionToken}`)
         .expect(409);
 
@@ -2038,9 +2056,9 @@ describe('Fase 5 — Matriz de Aceptación E2E (Bootstrap Real)', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
       expect(kpiAfterCancel.body).toMatchObject({
-        monthlyRevenue: 0,
+        monthlyRevenue: 250000,
         monthlyPending: 0,
-        monthlyIssued: 0,
+        monthlyIssued: 250000,
       });
     });
   });

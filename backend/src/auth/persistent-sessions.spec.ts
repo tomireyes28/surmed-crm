@@ -1,3 +1,4 @@
+import { transactionalMock } from '../../test/helpers/transactional-mock';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -29,7 +30,7 @@ describe('Persistent sessions across service restarts', () => {
       const revocation = new TokenRevocationService(prisma as never);
       return {
         revocation,
-        auth: new AuthService(prisma as never, jwt, revocation),
+        auth: new AuthService(transactionalMock(prisma as never), jwt, revocation),
         strategy: new JwtStrategy(
           prisma as never,
           new ConfigService({ JWT_SECRET: secret }),

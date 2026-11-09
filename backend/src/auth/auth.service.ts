@@ -10,6 +10,7 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import * as bcrypt from 'bcrypt';
 import { assertNewPassword, assertPasswordByteLimit } from './password-policy';
+import { serializable } from '../common/utils/transaction.util';
 import { randomUUID } from 'node:crypto';
 import { TokenRevocationService } from './token-revocation.service';
 import { LoginRateLimitService } from './login-rate-limit.service';
@@ -30,53 +31,56 @@ export class AuthService {
 
     this.loginRateLimitService?.assertAllowed(email, clientIp);
 
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
+    return serializable(this.prisma, async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { email },
+      });
 
-    if (!user || !user.isActive) {
-      this.loginRateLimitService?.recordFailure(email, clientIp);
-      throw new UnauthorizedException(
-        'Credenciales incorrectas o usuario inactivo',
-      );
-    }
+      if (!user || !user.isActive) {
+        this.loginRateLimitService?.recordFailure(email, clientIp);
+        throw new UnauthorizedException(
+          'Credenciales incorrectas o usuario inactivo',
+        );
+      }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      this.loginRateLimitService?.recordFailure(email, clientIp);
-      throw new UnauthorizedException('Credenciales incorrectas');
-    }
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        this.loginRateLimitService?.recordFailure(email, clientIp);
+        throw new UnauthorizedException('Credenciales incorrectas');
+      }
 
-    this.loginRateLimitService?.reset(email, clientIp);
+      this.loginRateLimitService?.reset(email, clientIp);
 
-    const jti = randomUUID();
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      jti,
-    };
-
-    const backendToken = await this.jwtService.signAsync(payload);
-    const { exp } = this.jwtService.decode<{ exp?: number }>(backendToken);
-    if (typeof exp !== 'number' || !Number.isFinite(exp)) {
-      throw new Error('El JWT debe tener una fecha de expiración.');
-    }
-    await this.tokenRevocationService.registerIssuedToken(
-      user.id,
-      jti,
-      new Date(exp * 1000),
-    );
-
-    return {
-      user: {
-        id: user.id,
-        name: user.name,
+      const jti = randomUUID();
+      const payload = {
+        sub: user.id,
         email: user.email,
         role: user.role,
-      },
-      backendToken,
-    };
+        jti,
+      };
+
+      const backendToken = await this.jwtService.signAsync(payload);
+      const { exp } = this.jwtService.decode<{ exp?: number }>(backendToken);
+      if (typeof exp !== 'number' || !Number.isFinite(exp)) {
+        throw new Error('El JWT debe tener una fecha de expiración.');
+      }
+      await this.tokenRevocationService.registerIssuedToken(
+        user.id,
+        jti,
+        new Date(exp * 1000),
+        tx,
+      );
+
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+        backendToken,
+      };
+    });
   }
 
   async logout(userId: string, jti?: string) {
@@ -117,32 +121,34 @@ export class AuthService {
       );
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+    return serializable(this.prisma, async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user || !user.isActive) {
+        throw new UnauthorizedException('Usuario no válido o inactivo');
+      }
+
+      const isCurrentValid = await bcrypt.compare(
+        dto.currentPassword,
+        user.password,
+      );
+      if (!isCurrentValid) {
+        throw new UnauthorizedException('La contraseña actual es incorrecta');
+      }
+
+      const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword },
+        select: { id: true },
+      });
+
+      await this.tokenRevocationService.revokeAllForUser(userId, tx);
+
+      return { message: 'Contraseña actualizada correctamente' };
     });
-
-    if (!user || !user.isActive) {
-      throw new UnauthorizedException('Usuario no válido o inactivo');
-    }
-
-    const isCurrentValid = await bcrypt.compare(
-      dto.currentPassword,
-      user.password,
-    );
-    if (!isCurrentValid) {
-      throw new UnauthorizedException('La contraseña actual es incorrecta');
-    }
-
-    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
-      select: { id: true },
-    });
-
-    await this.tokenRevocationService.revokeAllForUser(userId);
-
-    return { message: 'Contraseña actualizada correctamente' };
   }
 }

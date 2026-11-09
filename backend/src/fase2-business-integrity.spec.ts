@@ -1,3 +1,4 @@
+import { transactionalMock } from '../test/helpers/transactional-mock';
 import {
   BadRequestException,
   ConflictException,
@@ -167,7 +168,7 @@ describe('Fase 2 — Integridad del negocio (T07, T08, T09, T10)', () => {
         },
       } as unknown as PrismaService;
 
-      const usersService = new UsersService(mockUsersPrisma);
+      const usersService = new UsersService(transactionalMock(mockUsersPrisma));
       await expect(usersService.remove('admin-1')).rejects.toThrow(
         ConflictException,
       );
@@ -424,7 +425,7 @@ describe('Fase 2 — Integridad del negocio (T07, T08, T09, T10)', () => {
           ),
       } as unknown as PrismaService;
 
-      const appointmentsService = new AppointmentsService(mockPrisma);
+      const appointmentsService = new AppointmentsService(transactionalMock(mockPrisma));
 
       // Dos reservas simultáneas superpuestas (10:00-10:30 y 10:15-10:45) para el mismo médico
       const concurrent = await Promise.allSettled([
@@ -503,7 +504,7 @@ describe('Fase 2 — Integridad del negocio (T07, T08, T09, T10)', () => {
         },
       } as unknown as PrismaService;
 
-      const appointmentsService = new AppointmentsService(mockPrisma);
+      const appointmentsService = new AppointmentsService(transactionalMock(mockPrisma));
 
       await expect(
         appointmentsService.updateStatus('apt-1', 'ATTENDED'),
@@ -526,7 +527,9 @@ describe('Fase 2 — Integridad del negocio (T07, T08, T09, T10)', () => {
         patientId: string;
         totalAmount: Prisma.Decimal;
         status: 'PENDING' | 'PAID' | 'CANCELLED';
+        paidAt?: Date;
         idempotencyKey?: string;
+    requestFingerprint?: string;
         createdAt: Date;
         updatedAt: Date;
         items: Array<{
@@ -575,6 +578,7 @@ describe('Fase 2 — Integridad del negocio (T07, T08, T09, T10)', () => {
                 totalAmount: Prisma.Decimal;
                 status: 'PENDING' | 'PAID';
                 idempotencyKey?: string;
+    requestFingerprint?: string;
                 items: {
                   create: Array<{
                     description: string;
@@ -592,6 +596,7 @@ describe('Fase 2 — Integridad del negocio (T07, T08, T09, T10)', () => {
                 totalAmount: data.totalAmount,
                 status: data.status,
                 idempotencyKey: data.idempotencyKey,
+                requestFingerprint: data.requestFingerprint,
                 createdAt: now,
                 updatedAt: now,
                 patient: {
@@ -617,11 +622,11 @@ describe('Fase 2 — Integridad del negocio (T07, T08, T09, T10)', () => {
               data,
             }: {
               where: { id: string };
-              data: { status: 'PAID' | 'CANCELLED' };
+              data: { status: 'PAID' | 'CANCELLED'; paidAt?: Date };
             }) => {
               const found = invoicesStore.find((i) => i.id === where.id);
               if (!found) throw new NotFoundException();
-              found.status = data.status;
+              Object.assign(found, data);
               return Promise.resolve(found);
             },
           ),
@@ -633,7 +638,7 @@ describe('Fase 2 — Integridad del negocio (T07, T08, T09, T10)', () => {
         },
       } as unknown as PrismaService;
 
-      const invoicesService = new InvoicesService(mockPrisma);
+      const invoicesService = new InvoicesService(transactionalMock(mockPrisma));
       const dashboardService = new DashboardService(mockPrisma);
 
       // 1. Emitir comprobante pendiente (con idempotencia)

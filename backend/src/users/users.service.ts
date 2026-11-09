@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { serializable } from '../common/utils/transaction.util';
 import { Role } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -116,100 +117,104 @@ export class UsersService {
   }
 
   async update(id: string, data: UpdateUserDto) {
-    if (data.role !== undefined && !VALID_ROLES.has(data.role)) {
-      throw new BadRequestException('El rol indicado no es válido.');
-    }
+    return serializable(this.prisma, async (tx) => {
+      if (data.role !== undefined && !VALID_ROLES.has(data.role)) {
+        throw new BadRequestException('El rol indicado no es válido.');
+      }
 
-    // Evitar dejar al centro sin ningún administrador activo (F16)
-    if (
-      data.role !== undefined &&
-      data.role !== 'ADMIN' &&
-      typeof this.prisma.user.count === 'function'
-    ) {
-      const targetUser = await this.prisma.user.findUnique({ where: { id } });
-      if (targetUser?.role === 'ADMIN' && targetUser.isActive !== false) {
-        const activeAdmins = await this.prisma.user.count({
-          where: { role: 'ADMIN', isActive: true },
-        });
-        if (activeAdmins <= 1) {
-          throw new ConflictException(
-            'No se puede quitar el rol ADMIN al único administrador activo del centro.',
-          );
+      // Evitar dejar al centro sin ningún administrador activo (F16)
+      if (data.role !== undefined && data.role !== 'ADMIN') {
+        const targetUser = await tx.user.findUnique({ where: { id } });
+        if (targetUser?.role === 'ADMIN' && targetUser.isActive !== false) {
+          const activeAdmins = await tx.user.count({
+            where: { role: 'ADMIN', isActive: true },
+          });
+          if (activeAdmins <= 1) {
+            throw new ConflictException(
+              'No se puede quitar el rol ADMIN al único administrador activo del centro.',
+            );
+          }
         }
       }
-    }
 
-    const updatePayload: {
-      name?: string;
-      email?: string;
-      role?: Role;
-      password?: string;
-      specialties?: {
-        set: Array<{ id: string }>;
-      };
-    } = {};
+      const updatePayload: {
+        name?: string;
+        email?: string;
+        role?: Role;
+        password?: string;
+        specialties?: {
+          set: Array<{ id: string }>;
+        };
+      } = {};
 
-    if (data.name !== undefined) {
-      updatePayload.name = data.name.trim();
-    }
-
-    if (data.email !== undefined) {
-      updatePayload.email = data.email.trim().toLowerCase();
-    }
-
-    if (data.role !== undefined) {
-      updatePayload.role = data.role;
-      if (data.role !== 'MEDICO') {
-        updatePayload.specialties = { set: [] };
+      if (data.name !== undefined) {
+        updatePayload.name = data.name.trim();
       }
-    }
 
-    if (data.specialtyId !== undefined) {
-      const trimmedSpec = data.specialtyId.trim();
-      updatePayload.specialties = trimmedSpec
-        ? { set: [{ id: trimmedSpec }] }
-        : { set: [] };
-    }
-
-    if (data.password !== undefined && data.password.trim().length > 0) {
-      if (data.password.trim().length < 8) {
-        throw new BadRequestException(
-          'La contraseña debe tener al menos 8 caracteres.',
-        );
+      if (data.email !== undefined) {
+        updatePayload.email = data.email.trim().toLowerCase();
       }
-      assertNewPassword(data.password);
-      updatePayload.password = await bcrypt.hash(data.password, 10);
-      await this.tokenRevocationService?.revokeAllForUser(id);
-    }
 
-    return await this.prisma.user.update({
-      where: { id },
-      data: updatePayload,
-      select: PUBLIC_USER_SELECT,
+      if (data.role !== undefined) {
+        updatePayload.role = data.role;
+        if (data.role !== 'MEDICO') {
+          updatePayload.specialties = { set: [] };
+        }
+      }
+
+      if (data.specialtyId !== undefined) {
+        const trimmedSpec = data.specialtyId.trim();
+        updatePayload.specialties = trimmedSpec
+          ? { set: [{ id: trimmedSpec }] }
+          : { set: [] };
+      }
+
+      if (data.password !== undefined && data.password.trim().length > 0) {
+        if (data.password.trim().length < 8) {
+          throw new BadRequestException(
+            'La contraseña debe tener al menos 8 caracteres.',
+          );
+        }
+        assertNewPassword(data.password);
+        updatePayload.password = await bcrypt.hash(data.password, 10);
+        await (
+          this.tokenRevocationService ?? new TokenRevocationService(this.prisma)
+        ).revokeAllForUser(id, tx);
+      }
+
+      return await tx.user.update({
+        where: { id },
+        data: updatePayload,
+        select: PUBLIC_USER_SELECT,
+      });
     });
   }
 
   async remove(id: string) {
-    // Evitar desactivar al último administrador activo del centro (F16)
-    if (typeof this.prisma.user.count === 'function') {
-      const targetUser = await this.prisma.user.findUnique({ where: { id } });
-      if (targetUser?.role === 'ADMIN' && targetUser.isActive !== false) {
-        const activeAdmins = await this.prisma.user.count({
-          where: { role: 'ADMIN', isActive: true },
-        });
-        if (activeAdmins <= 1) {
-          throw new ConflictException(
-            'No se puede desactivar al único administrador activo del centro.',
-          );
+    return serializable(this.prisma, async (tx) => {
+      // Evitar desactivar al último administrador activo del centro (F16)
+      {
+        const targetUser = await tx.user.findUnique({ where: { id } });
+        if (targetUser?.role === 'ADMIN' && targetUser.isActive !== false) {
+          const activeAdmins = await tx.user.count({
+            where: { role: 'ADMIN', isActive: true },
+          });
+          if (activeAdmins <= 1) {
+            throw new ConflictException(
+              'No se puede desactivar al único administrador activo del centro.',
+            );
+          }
         }
       }
-    }
 
-    await this.tokenRevocationService?.revokeAllForUser(id);
-    return await this.prisma.user.update({
-      where: { id },
-      data: { isActive: false },
-      select: PUBLIC_USER_SELECT,
+      await (
+        this.tokenRevocationService ?? new TokenRevocationService(this.prisma)
+      ).revokeAllForUser(id, tx);
+      return await tx.user.update({
+        where: { id },
+        data: { isActive: false },
+        select: PUBLIC_USER_SELECT,
+      });
     });
   }
 

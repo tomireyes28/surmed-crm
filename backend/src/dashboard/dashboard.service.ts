@@ -31,33 +31,36 @@ export class DashboardService {
     const { start: firstDayOfMonth, end: lastDayOfMonth } =
       getClinicMonthBounds(year, month);
 
-    const currentMonthInvoices = await this.prisma.invoice.findMany({
+    const now = new Date();
+    // Paid uses collection date; issued uses issue date; pending is outstanding now.
+    const invoices = await this.prisma.invoice.findMany({
       where: {
-        createdAt: {
-          gte: firstDayOfMonth,
-          lte: lastDayOfMonth,
-        },
-        status: { not: 'CANCELLED' },
+        OR: [
+          { paidAt: { gte: firstDayOfMonth, lte: lastDayOfMonth } },
+          {
+            createdAt: { gte: firstDayOfMonth, lte: lastDayOfMonth },
+            status: { not: 'CANCELLED' },
+          },
+          { status: 'PENDING', createdAt: { lte: now } },
+        ],
       },
     });
-
-    // Separación estricta de Cobrado (PAID) vs Pendiente (PENDING) vs Emitido (T10 / F09):
-    // Emitir una factura en estado PENDING NO incrementa `monthlyRevenue` ("Cobrado").
     let paidCents = 0;
     let pendingCents = 0;
-
-    for (const inv of currentMonthInvoices) {
-      const amountCents = toCents(inv.totalAmount);
-      if (inv.status === 'PAID') {
-        paidCents += amountCents;
-      } else if (inv.status === 'PENDING') {
-        pendingCents += amountCents;
-      }
+    let issuedCents = 0;
+    const inMonth = (date: Date | null) =>
+      date !== null && date >= firstDayOfMonth && date <= lastDayOfMonth;
+    for (const invoice of invoices) {
+      const cents = toCents(invoice.totalAmount);
+      if (inMonth(invoice.paidAt)) paidCents += cents;
+      if (invoice.status === 'PENDING' && invoice.createdAt <= now)
+        pendingCents += cents;
+      if (invoice.status !== 'CANCELLED' && inMonth(invoice.createdAt))
+        issuedCents += cents;
     }
-
-    const monthlyRevenue = Math.round(paidCents) / 100;
-    const monthlyPending = Math.round(pendingCents) / 100;
-    const monthlyIssued = Math.round(paidCents + pendingCents) / 100;
+    const monthlyRevenue = paidCents / 100;
+    const monthlyPending = pendingCents / 100;
+    const monthlyIssued = issuedCents / 100;
 
     return {
       totalPatients,

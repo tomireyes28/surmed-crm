@@ -24,16 +24,15 @@ export class AuditService {
    * automática de cualquier campo sensible (notas clínicas, claves, tokens).
    * No expone métodos de borrado ni edición (inmutabilidad operativa T12).
    */
-  async record(input: CreateAuditLogInput) {
-    if (typeof this.prisma.auditLog?.create !== 'function') {
-      return null;
-    }
-
+  async record(
+    input: CreateAuditLogInput,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
     const sanitizedMetadata = input.metadata
       ? (redactSensitiveData(input.metadata) as Prisma.InputJsonValue)
       : undefined;
 
-    return await this.prisma.auditLog.create({
+    return await db.auditLog.create({
       data: {
         actorId: input.actorId,
         actorRole: input.actorRole,

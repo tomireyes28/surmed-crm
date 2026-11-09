@@ -1,3 +1,4 @@
+import { transactionalMock } from '../../test/helpers/transactional-mock';
 import {
   BadRequestException,
   ConflictException,
@@ -125,13 +126,16 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
 
       const revocation = new TokenRevocationService(sessionStore() as never);
       const rateLimit = new LoginRateLimitService();
-      const usersService = new UsersService(prismaMock as never, revocation);
+      const usersService = new UsersService(
+        transactionalMock(prismaMock as never),
+        revocation,
+      );
       const jwtService = new JwtService({
         secret: 'test_secret_with_at_least_16_chars',
         signOptions: { expiresIn: '8h' },
       });
       const authService = new AuthService(
-        prismaMock as never,
+        transactionalMock(prismaMock as never),
         jwtService,
         revocation,
         rateLimit,
@@ -189,7 +193,9 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
           findUnique: jest.fn().mockResolvedValue({ id: 'existing' }),
         },
       };
-      const usersService = new UsersService(prismaMock as never);
+      const usersService = new UsersService(
+        transactionalMock(prismaMock as never),
+      );
 
       await expect(
         usersService.create({
@@ -212,14 +218,29 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
 
     it('AppointmentsService.create selecciona solo campos públicos del médico (sin password)', async () => {
       let capturedArgs: Record<string, unknown> | null = null;
-      const appointmentsService = new AppointmentsService({
-        appointment: {
-          create: jest.fn((args: Record<string, unknown>) => {
-            capturedArgs = args;
-            return Promise.resolve(args);
-          }),
-        },
-      } as never);
+      const appointmentsService = new AppointmentsService(
+        transactionalMock({
+          patient: {
+            findUnique: jest.fn().mockResolvedValue({ isActive: true }),
+          },
+          user: {
+            findUnique: jest
+              .fn()
+              .mockResolvedValue({
+                role: 'MEDICO',
+                isActive: true,
+                specialties: [{ id: 'spec-1' }],
+              }),
+          },
+          appointment: {
+            findMany: jest.fn().mockResolvedValue([]),
+            create: jest.fn((args: Record<string, unknown>) => {
+              capturedArgs = args;
+              return Promise.resolve(args);
+            }),
+          },
+        } as never),
+      );
 
       await appointmentsService.create({
         patientId: 'pat-1',
@@ -328,7 +349,14 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
         invoice: {
           findMany: jest
             .fn()
-            .mockResolvedValue([{ totalAmount: 150000, status: 'PAID' }]),
+            .mockResolvedValue([
+              {
+                totalAmount: 150000,
+                status: 'PAID',
+                paidAt: new Date(),
+                createdAt: new Date(),
+              },
+            ]),
         },
       };
       const dashboardService = new DashboardService(prismaMock as never);
@@ -395,14 +423,18 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
       ).toBe(true);
 
       let whereUsed: Record<string, unknown> | undefined;
-      const usersService = new UsersService({
-        user: {
-          findMany: jest.fn(({ where }: { where: Record<string, unknown> }) => {
-            whereUsed = where;
-            return Promise.resolve([]);
-          }),
-        },
-      } as never);
+      const usersService = new UsersService(
+        transactionalMock({
+          user: {
+            findMany: jest.fn(
+              ({ where }: { where: Record<string, unknown> }) => {
+                whereUsed = where;
+                return Promise.resolve([]);
+              },
+            ),
+          },
+        } as never),
+      );
 
       await usersService.findAll('ADMIN', 'RECEPCION');
       expect(whereUsed).toEqual({ isActive: true, role: 'MEDICO' });
@@ -492,7 +524,7 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
         },
       };
       const authService = new AuthService(
-        prismaMock as never,
+        transactionalMock(prismaMock as never),
         new JwtService({ secret: 'clave_produccion_segura_2026_surmed' }),
         new TokenRevocationService(sessionStore() as never),
         rateLimit,

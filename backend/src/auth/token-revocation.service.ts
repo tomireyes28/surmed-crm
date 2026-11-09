@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -9,8 +10,9 @@ export class TokenRevocationService {
     userId: string,
     jti: string,
     expiresAt: Date,
+    db: Prisma.TransactionClient = this.prisma,
   ): Promise<void> {
-    await this.prisma.authSession.create({ data: { userId, jti, expiresAt } });
+    await db.authSession.create({ data: { userId, jti, expiresAt } });
   }
 
   async revokeToken(jti?: string): Promise<void> {
@@ -21,8 +23,11 @@ export class TokenRevocationService {
     });
   }
 
-  async revokeAllForUser(userId: string): Promise<void> {
-    await this.prisma.authSession.updateMany({
+  async revokeAllForUser(
+    userId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<void> {
+    await db.authSession.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });

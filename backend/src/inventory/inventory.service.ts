@@ -8,47 +8,29 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-inventory.dto';
 import { UpdateProductDto } from './dto/update-inventory.dto';
 import { StockMovementDto } from './dto/stock-movement.dto';
+import { serializable } from '../common/utils/transaction.util';
+import {
+  idempotencyKey,
+  fingerprint,
+  assertReplay,
+} from '../common/utils/idempotency.util';
 import { toDecimal, toMoneyNumber } from '../common/utils/money.util';
 
 @Injectable()
 export class InventoryService {
-  private readonly productLocks = new Map<string, Promise<unknown>>();
-
   constructor(private prisma: PrismaService) {}
 
   private serializeProduct(product: Product) {
     return {
       ...product,
-      price: product.price !== null && product.price !== undefined
-        ? toMoneyNumber(product.price)
-        : null,
+      price:
+        product.price !== null && product.price !== undefined
+          ? toMoneyNumber(product.price)
+          : null,
       isLowStock:
         product.category === 'INSUMO_MEDICO' &&
         product.quantity <= product.minStock,
     };
-  }
-
-  private async withProductLock<T>(
-    productId: string,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const previous = this.productLocks.get(productId) ?? Promise.resolve();
-    let release!: () => void;
-    const current = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const chained = previous.then(() => current);
-    this.productLocks.set(productId, chained);
-
-    await previous.catch(() => undefined);
-    try {
-      return await fn();
-    } finally {
-      release();
-      if (this.productLocks.get(productId) === chained) {
-        this.productLocks.delete(productId);
-      }
-    }
   }
 
   // 1. Crear un producto nuevo (arranca con stock 0 por defecto)
@@ -128,7 +110,9 @@ export class InventoryService {
       updateData.name = data.name.trim();
     }
     if (data.description !== undefined) {
-      updateData.description = data.description ? data.description.trim() : null;
+      updateData.description = data.description
+        ? data.description.trim()
+        : null;
     }
     if (data.minStock !== undefined) {
       if (!Number.isInteger(data.minStock) || data.minStock < 0) {
@@ -187,17 +171,27 @@ export class InventoryService {
       );
     }
 
-    const effectiveKey =
-      (dto.idempotencyKey ?? idempotencyHeader)?.trim() || undefined;
+    const effectiveKey = idempotencyKey(dto.idempotencyKey, idempotencyHeader);
+    const requestFingerprint = fingerprint('inventory.movement', userId, {
+      productId: dto.productId,
+      type: dto.type,
+      quantity: dto.quantity,
+      notes: dto.notes?.trim() || '',
+    });
 
-    return this.withProductLock(dto.productId, async () => {
-      return await this.prisma.$transaction(async (tx) => {
+    return serializable(
+      this.prisma,
+      async (tx) => {
         // Idempotencia: si ya se registró un movimiento con esta clave, devolver el resultado previo sin descontar dos veces
-        if (effectiveKey && typeof tx.stockMovement.findUnique === 'function') {
+        if (effectiveKey) {
           const existingMovement = await tx.stockMovement.findUnique({
             where: { idempotencyKey: effectiveKey },
           });
           if (existingMovement) {
+            assertReplay(
+              existingMovement.requestFingerprint,
+              requestFingerprint,
+            );
             const currentProduct = await tx.product.findUnique({
               where: { id: dto.productId },
             });
@@ -233,46 +227,33 @@ export class InventoryService {
         }
 
         // Actualización condicional atómica dentro de la transacción (F05 / T08)
-        let updatedProduct: Product;
-        if (typeof tx.product.updateMany === 'function') {
-          const conditionalUpdate = await tx.product.updateMany({
-            where: {
-              id: dto.productId,
-              isActive: true,
-              ...(dto.type === 'OUT' ? { quantity: { gte: dto.quantity } } : {}),
-            },
-            data: {
-              quantity:
-                dto.type === 'IN'
-                  ? { increment: dto.quantity }
-                  : { decrement: dto.quantity },
-            },
-          });
+        const conditionalUpdate = await tx.product.updateMany({
+          where: {
+            id: dto.productId,
+            isActive: true,
+            ...(dto.type === 'OUT' ? { quantity: { gte: dto.quantity } } : {}),
+          },
+          data: {
+            quantity:
+              dto.type === 'IN'
+                ? { increment: dto.quantity }
+                : { decrement: dto.quantity },
+          },
+        });
 
-          if (conditionalUpdate.count === 0) {
-            throw new BadRequestException(
-              `Stock insuficiente o producto inactivo al confirmar el movimiento.`,
-            );
-          }
-
-          const reloaded = await tx.product.findUnique({
-            where: { id: dto.productId },
-          });
-          if (!reloaded) {
-            throw new NotFoundException('Producto no encontrado');
-          }
-          updatedProduct = reloaded;
-        } else {
-          updatedProduct = await tx.product.update({
-            where: { id: dto.productId },
-            data: {
-              quantity:
-                dto.type === 'IN'
-                  ? { increment: dto.quantity }
-                  : { decrement: dto.quantity },
-            },
-          });
+        if (conditionalUpdate.count === 0) {
+          throw new BadRequestException(
+            `Stock insuficiente o producto inactivo al confirmar el movimiento.`,
+          );
         }
+
+        const reloaded = await tx.product.findUnique({
+          where: { id: dto.productId },
+        });
+        if (!reloaded) {
+          throw new NotFoundException('Producto no encontrado');
+        }
+        const updatedProduct = reloaded;
 
         const movement = await tx.stockMovement.create({
           data: {
@@ -281,7 +262,9 @@ export class InventoryService {
             type: dto.type,
             quantity: dto.quantity,
             notes: dto.notes?.trim() || undefined,
-            ...(effectiveKey ? { idempotencyKey: effectiveKey } : {}),
+            ...(effectiveKey
+              ? { idempotencyKey: effectiveKey, requestFingerprint }
+              : {}),
           },
         });
 
@@ -289,7 +272,8 @@ export class InventoryService {
           movement,
           updatedProduct: this.serializeProduct(updatedProduct),
         };
-      });
-    });
+      },
+      Boolean(effectiveKey),
+    );
   }
 }

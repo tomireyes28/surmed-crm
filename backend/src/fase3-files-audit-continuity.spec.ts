@@ -1,3 +1,4 @@
+import { transactionalMock } from '../test/helpers/transactional-mock';
 import {
   BadRequestException,
   PayloadTooLargeException,
@@ -109,7 +110,7 @@ describe('Fase 3 — Archivos clínicos, auditoría y continuidad operativa (T11
         },
       } as unknown as PrismaService;
 
-      const service = new MedicalRecordsService(mockPrisma, mockStorage);
+      const service = new MedicalRecordsService(transactionalMock(mockPrisma), mockStorage);
       const validPdf = {
         originalname: 'estudio.pdf',
         mimetype: 'application/pdf',
@@ -163,7 +164,7 @@ describe('Fase 3 — Archivos clínicos, auditoría y continuidad operativa (T11
         },
       } as unknown as PrismaService;
 
-      const service = new MedicalRecordsService(mockPrisma, mockStorage);
+      const service = new MedicalRecordsService(transactionalMock(mockPrisma), mockStorage);
       const result = await service.findByPatient('pat-1', 'doc-1', 'MEDICO');
 
       expect(result).toHaveLength(1);
@@ -231,11 +232,11 @@ describe('Fase 3 — Archivos clínicos, auditoría y continuidad operativa (T11
 
       const auditService = new AuditService(mockPrisma);
       const medicalRecordsService = new MedicalRecordsService(
-        mockPrisma,
+        transactionalMock(mockPrisma),
         new StorageService(),
         auditService,
       );
-      const invoicesService = new InvoicesService(mockPrisma, auditService);
+      const invoicesService = new InvoicesService(transactionalMock(mockPrisma), auditService);
 
       // 1. Lectura de historia clínica
       await medicalRecordsService.findByPatient('pat-1', 'doc-1', 'MEDICO');
