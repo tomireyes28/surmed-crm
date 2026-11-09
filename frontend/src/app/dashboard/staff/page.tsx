@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { api } from '@/services/api';
 import {
   Plus,
   Users,
@@ -16,6 +17,7 @@ import { ErrorAlert } from '@/components/ui/PageState';
 import { isAxiosError } from 'axios';
 
 export default function StaffPage() {
+  const [recoveryLink, setRecoveryLink] = useState('');
   const [users, setUsers] = useState<User[]>([]);
   const [showInactive, setShowInactive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,8 +79,18 @@ export default function StaffPage() {
     }
   };
 
+  const issueRecovery = async (userId: string) => {
+    const reason = window.prompt('Confirme cómo verificó la identidad del usuario (mínimo 10 caracteres):');
+    if (!reason || reason.trim().length < 10) return;
+    try {
+      const { data } = await api.post('/auth/recovery/issue', { userId, reason });
+      setRecoveryLink(`${window.location.origin}/recover#token=${encodeURIComponent(data.token)}`);
+    } catch (error) { alert(isAxiosError(error) ? String(error.response?.data?.message || 'No se pudo generar el enlace.') : 'Error de conexión.'); }
+  };
+
   return (
     <div className="space-y-6">
+      {recoveryLink && <section className="border bg-white p-4 space-y-2"><p>Entregue este enlace solo al usuario verificado. Vence en 15 minutos.</p><input aria-label="Enlace de recuperación" className="border p-2 w-full" readOnly value={recoveryLink} /><button onClick={() => setRecoveryLink('')}>Ocultar enlace</button></section>}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -195,6 +207,7 @@ export default function StaffPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {!isInactive && <button type="button" onClick={() => void issueRecovery(user.id)} className="text-blue-700 text-sm">Recuperar acceso</button>}
                           <Link
                             href={`/dashboard/staff/${user.id}/edit`}
                             aria-label={`Editar a ${user.name}`}

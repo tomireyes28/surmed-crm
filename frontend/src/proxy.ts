@@ -12,7 +12,10 @@ function hasValidJwtStructureAndExp(token?: string): boolean {
 
   try {
     const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    const padded = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      '=',
+    );
     const decoded = JSON.parse(atob(padded));
 
     if (
@@ -35,8 +38,8 @@ function hasValidJwtStructureAndExp(token?: string): boolean {
   }
 }
 
-export function middleware(request: NextRequest) {
-  const rawToken = request.cookies.get('token')?.value;
+export function proxy(request: NextRequest) {
+  const rawToken = request.cookies.get('surmed-session')?.value;
   const isTokenPlausible = hasValidJwtStructureAndExp(rawToken);
   const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard');
   const isLoginRoute = request.nextUrl.pathname === '/';
@@ -46,7 +49,7 @@ export function middleware(request: NextRequest) {
     const response = isDashboardRoute
       ? NextResponse.redirect(new URL('/', request.url))
       : NextResponse.next();
-    response.cookies.delete('token');
+    response.cookies.delete('surmed-session');
     return response;
   }
 

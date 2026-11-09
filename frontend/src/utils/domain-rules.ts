@@ -29,8 +29,7 @@ export const ROLE_PERMISSIONS = {
   canArchivePatient: (role?: string | null) => role === 'ADMIN',
   canReactivatePatient: (role?: string | null) =>
     role === 'ADMIN' || role === 'RECEPCION',
-  canReadClinicalHistory: (role?: string | null) =>
-    role === 'MEDICO' || role === 'ADMIN',
+  canReadClinicalHistory: (role?: string | null) => role === 'MEDICO',
   canCreateClinicalEvolution: (role?: string | null) => role === 'MEDICO',
 } as const;
 

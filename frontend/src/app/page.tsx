@@ -6,12 +6,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, LoginFormValues } from '../schemas/auth.schema';
 import { useAuthStore } from '../store/authStore';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
 import { isAxiosError } from 'axios';
 import { api } from '@/services/api';
 
 export default function LoginPage() {
-  const setAuth = useAuthStore((state) => state.setAuth);
+  const setUser = useAuthStore((state) => state.setUser);
   const router = useRouter();
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -27,17 +26,7 @@ export default function LoginPage() {
     setLoginError(null);
     try {
       const response = await api.post('/auth/login', data);
-      const { backendToken, user } = response.data;
-
-      setAuth(backendToken, user);
-
-      const isSecure =
-        typeof window !== 'undefined' && window.location.protocol === 'https:';
-      Cookies.set('token', backendToken, {
-        expires: 1 / 3, // 8 horas
-        sameSite: 'strict',
-        secure: isSecure,
-      });
+      setUser(response.data.user);
 
       router.push('/dashboard');
     } catch (error) {
@@ -79,6 +68,7 @@ export default function LoginPage() {
           </div>
         )}
 
+        <p className="text-sm mb-4">¿Olvidó su clave? Solicite un enlace de recuperación al administrador de Surmed.</p>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label

@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/services/api';
-import Cookies from 'js-cookie';
 import {
   Users,
   Package,
@@ -36,6 +35,8 @@ export default function DashboardLayout({
   const logoutStore = useAuthStore((state) => state.logout);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionError, setSessionError] = useState(false);
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -49,12 +50,13 @@ export default function DashboardLayout({
   const handleLogout = useCallback(async () => {
     try {
       await api.post('/auth/logout');
-    } catch {
-      // Si el token ya expiró o fue revocado, limpiamos igualmente el cliente
-    } finally {
-      Cookies.remove('token');
       logoutStore();
       router.replace('/');
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 401) {
+        logoutStore(); router.replace('/'); return;
+      }
+      alert('No se pudo confirmar el cierre de sesión. Reintente antes de dejar el equipo.');
     }
   }, [logoutStore, router]);
 
@@ -62,13 +64,6 @@ export default function DashboardLayout({
     const timer = setTimeout(() => {
       setIsMounted(true);
     }, 0);
-
-    const token = Cookies.get('token');
-    if (!token) {
-      logoutStore();
-      router.replace('/');
-      return () => clearTimeout(timer);
-    }
 
     // Validamos la sesión real con el backend al montar el layout protegido
     api
@@ -81,12 +76,16 @@ export default function DashboardLayout({
             email: res.data.email,
             role: res.data.role,
           });
+          setSessionReady(true);
         }
       })
-      .catch(() => {
-        Cookies.remove('token');
-        logoutStore();
-        router.replace('/');
+      .catch((error) => {
+        if (isAxiosError(error) && error.response?.status === 401) {
+          logoutStore();
+          router.replace('/');
+        } else {
+          setSessionError(true);
+        }
       });
 
     return () => clearTimeout(timer);
@@ -138,7 +137,6 @@ export default function DashboardLayout({
       });
       setTimeout(() => {
         setIsPasswordModalOpen(false);
-        Cookies.remove('token');
         logoutStore();
         router.replace('/');
       }, 1200);
@@ -205,6 +203,8 @@ export default function DashboardLayout({
   );
 
   if (!isMounted) return null;
+  if (sessionError) return <main className="max-w-md mx-auto my-16 p-6 space-y-4" role="alert"><p>No se pudo verificar la sesión. Compruebe la conexión y reintente.</p><button className="border rounded p-2" onClick={() => window.location.reload()}>Reintentar</button></main>;
+  if (!sessionReady) return <p role="status" className="p-6">Verificando sesión…</p>;
 
   return (
     <div className="min-h-screen bg-slate-50 flex">

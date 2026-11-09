@@ -2,6 +2,8 @@
 
 > Actualización posterior: la etapa 1 fue implementada y verificada. Ver [Etapa 1 implementada](ETAPA-1-IMPLEMENTADA.md) para cambios, resultados y condiciones de despliegue. Los hallazgos siguientes conservan el diagnóstico previo a esa implementación.
 
+> Etapa 2: política clínica y recuperación aprobadas por el usuario e implementadas, sesiones HttpOnly, límites persistentes y descargas revocables. Ver [Etapa 2 implementada](ETAPA-2-IMPLEMENTADA.md) para las pruebas ejecutadas y los pendientes operativos. El diagnóstico histórico de R04/R06 de abajo ya no describe el código actual. El próximo trabajo es la etapa 3; los privilegios del rol de base y las políticas reales de Supabase todavía requieren validación en staging.
+
 Fecha: 8 de noviembre de 2026. Commit revisado: `38829d3380a95dfd391ce1a0957a9fea14740c9c`. Árbol de trabajo limpio antes de la revisión. Esta intervención agrega documentación y reproducciones; no modifica la aplicación.
 
 ## Dictamen

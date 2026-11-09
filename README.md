@@ -10,7 +10,7 @@ Sistema integral de gestión para el **Centro Médico Surmed (Asunción, Paragua
 flowchart LR
   subgraph Cliente["Frontend (Next.js 16.4.5 + React 19)"]
     UI["App Router / Dashboard"]
-    MW["Middleware de Sesión JWT"]
+    MW["Proxy de navegación + BFF /api/backend"]
     PDF["Generador de Comprobantes PDF"]
   end
 
@@ -27,11 +27,12 @@ flowchart LR
   end
 
   UI --> MW
-  UI -->|HTTPS + Bearer JWT / Idempotency-Key| Guards
+  UI -->|Cookie HttpOnly / Idempotency-Key| MW
+  MW -->|Bearer JWT solo entre servidores| Guards
   Guards --> Controllers
   Controllers --> Services
   Services --> PG
-  Services -->|URLs firmadas 15 min| SB
+  Services -->|Descarga privada autorizada por solicitud| SB
   Services --> Audit
   Audit --> PG
 ```
@@ -44,7 +45,8 @@ flowchart LR
 | --- | :---: | :---: | :---: |
 | Padrón administrativo de pacientes (`GET/POST/PATCH /patients`) | Sí | Sí | Sí |
 | Archivar / Reactivar pacientes | Sí (ambos) | No | Reactivar |
-| Lectura de historia clínica y adjuntos (`GET /medical-records/patient/:id`) | Sí | Sí | **No (`403`)** |
+| Lectura de historia clínica y adjuntos (`GET /medical-records/patient/:id`) | **No (`403`)** | Asignación o turno propio no cancelado | **No (`403`)** |
+| Asignar / revocar acceso clínico y emitir recuperación de acceso | Sí | No | No |
 | Creación de evolución clínica y adendas (`POST /medical-records`) | **No (`403`)** | **Sí (Exclusivo)** | **No (`403`)** |
 | Agenda de turnos y cambios de estado (`GET/POST/PATCH /appointments`) | Sí | Sí | Sí |
 | Inventario de insumos y movimientos (`GET/POST/PATCH /inventory/*`) | Sí | **No (`403`)** | Sí |
@@ -59,13 +61,14 @@ flowchart LR
 1. **Seguridad de Sesión y Credenciales (`Fase 0`)**:
    - Contraseñas almacenadas exclusivamente con hash `bcrypt`. Ningún endpoint devuelve el campo `password`.
    - Rate-limiting en `POST /auth/login` (`429 Too Many Requests`) y revocación inmediata de tokens al cerrar sesión, cambiar contraseña o desactivar un usuario.
-   - Cierre automático de sesión por inactividad (`30 min`) en equipos compartidos del centro.
+   - Cookie HttpOnly, Secure en producción y SameSite strict, con BFF del mismo origen y control de origen/header en escrituras. Inactividad de 30 min comprobada por API y persistida en PostgreSQL, además del temporizador de interfaz.
+   - Recuperación: ADMIN verifica identidad, registra el motivo y entrega un enlace de un solo uso de 15 min. La base guarda su hash; al canjear se revocan todas las sesiones y enlaces previos.
 2. **Privacidad Clínica y Adjuntos (`Fase 0` + `Fase 3`)**:
    - `GET /patients/:id` devuelve únicamente datos administrativos y turnos; jamás incluye `medicalRecords`.
-   - Los adjuntos clínicos se validan por tamaño (`<= 10 MB`), MIME y **magic bytes reales** (`.pdf`, `.jpg`, `.png`, `.webp`), se almacenan con clave UUID en bucket privado y se sirven mediante URLs firmadas de 15 minutos con compensación automática ante fallos de base de datos.
+   - Los adjuntos clínicos se validan por tamaño (`<= 10 MB`), MIME y **magic bytes reales** (`.pdf`, `.jpg`, `.png`, `.webp`). Se almacenan con clave UUID en bucket privado comprobado en ejecución; la descarga pasa por autorización de sesión, paciente y revocación en cada solicitud. Esta validación no es un antivirus. Se conserva compensación ante fallos de base de datos.
    - Las correcciones sobre evoluciones firmadas se registran como **adendas inmutables** (`parentRecordId`) y cada lectura/escritura queda trazada en `AuditLog`.
 3. **Integridad de Negocio (`Fase 2`)**:
-   - **Zona horaria y fechas**: Toda la agenda y los cortes mensuales operan explícitamente en `America/Asuncion` (`UTC-03:00`). La fecha de nacimiento se persiste como fecha civil (`@db.Date`) sin corrimientos horarios.
+   - **Zona horaria y fechas**: Los cálculos de agenda y cortes mensuales del backend usan `America/Asuncion` (`UTC-03:00`). La fecha de nacimiento conserva `DateTime` normalizado a mediodía UTC y helpers civiles; queda verificar el calendario visual desde otras zonas en la etapa 3.
    - **Moneda y precisión**: Guaraníes (`PYG`, `es-PY`) respaldados por `Decimal(12, 2)` en PostgreSQL y aritmética exacta en centavos enteros en backend.
    - **Inventario y Turnos**: Actualización condicional atómica de stock con bloqueo por producto, restricción `CHECK (quantity >= 0)` y soporte de `Idempotency-Key`. Validación de no solapamiento de intervalos para médico y paciente.
 
@@ -74,7 +77,7 @@ flowchart LR
 ## 4. Requisitos e Instalación Local
 
 ### Requisitos previos
-- **Node.js** `>= 20.x` y `npm >= 10.x`
+- **Node.js** `>= 22.x` y `npm >= 10.x`
 - **PostgreSQL** `>= 15` (local o instancia gestionada en Supabase/Neon/RDS)
 - Proyecto de **Supabase** con bucket privado `medical-records`
 
@@ -85,14 +88,17 @@ flowchart LR
    DATABASE_URL="postgresql://usuario:password@localhost:5432/surmed_crm?schema=public"
    JWT_SECRET="reemplazar_por_secreto_aleatorio_de_al_menos_32_caracteres"
    SUPABASE_URL="https://tu-proyecto.supabase.co"
-   SUPABASE_KEY="service_role_key_privada_del_servidor"
-   FRONTEND_URL="http://localhost:3001"
+   SUPABASE_SERVICE_ROLE_KEY="service_role_key_privada_del_servidor"
+   CORS_ORIGINS="http://localhost:3001"
    PORT=3000
    ```
 2. Copiar `frontend/.env.example` a `frontend/.env.local`:
    ```env
-   NEXT_PUBLIC_API_URL="http://localhost:3000"
+   API_URL="http://localhost:3000"
+   APP_ORIGIN="http://localhost:3001"
    ```
+
+En producción, `APP_ORIGIN` debe coincidir exactamente con el origen HTTPS público de la web; `API_URL` es la dirección del backend accesible desde Next. Desplegar frontend y backend juntos tras ejecutar migraciones. Ver [etapa 2: verificación y despliegue](docs/auditoria-2026-11-08/ETAPA-2-IMPLEMENTADA.md).
 
 ### Instalación y migraciones
 

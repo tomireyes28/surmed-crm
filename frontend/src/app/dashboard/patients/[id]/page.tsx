@@ -6,6 +6,8 @@ import { patientsService } from '@/services/patients.service';
 import { medicalRecordsService } from '@/services/medicalRecords.service';
 import { Patient } from '@/schemas/patient.schema';
 import Link from 'next/link';
+import { ClinicalAccessPanel } from '@/components/ClinicalAccessPanel';
+import { api } from '@/services/api';
 import {
   ArrowLeft,
   Stethoscope,
@@ -32,12 +34,14 @@ import {
 import {
   APPOINTMENT_STATUS_META,
   AppointmentStatusType,
+  ROLE_PERMISSIONS,
 } from '@/utils/domain-rules';
 
 interface MedicalRecord {
   id: string;
   notes: string;
   attachments: string[];
+  attachmentFiles?: { id: string }[];
   parentRecordId?: string | null;
   missingAttachmentsCount?: number;
   createdAt: string;
@@ -64,9 +68,9 @@ export default function PatientDetailPage() {
   const patientId = params.id as string;
 
   const user = useAuthStore((state) => state.user);
-  const canReadClinicalHistory =
-    user?.role === 'MEDICO' || user?.role === 'ADMIN';
-  const canCreateClinicalEvolution = user?.role === 'MEDICO';
+  const canReadClinicalHistory = ROLE_PERMISSIONS.canReadClinicalHistory(user?.role);
+  const [clinicalDenied, setClinicalDenied] = useState(false);
+  const canCreateClinicalEvolution = ROLE_PERMISSIONS.canCreateClinicalEvolution(user?.role) && !clinicalDenied;
 
   const [patient, setPatient] = useState<PatientWithAppointments | null>(null);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
@@ -88,14 +92,24 @@ export default function PatientDetailPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
+    setRecords([]);
+    setClinicalDenied(false);
     try {
       const patientData = await patientsService.getById(patientId);
       setPatient(patientData);
 
       // No solicitar datos clínicos desde una sesión sin permiso (S03 / T02)
       if (canReadClinicalHistory) {
-        const recordsData = await medicalRecordsService.getByPatientId(patientId);
-        setRecords(recordsData);
+        try {
+          const recordsData = await medicalRecordsService.getByPatientId(patientId);
+          setRecords(recordsData);
+        } catch (error) {
+          if (isAxiosError(error) && error.response?.status === 403) {
+            setClinicalDenied(true);
+          } else {
+            throw error;
+          }
+        }
       } else {
         setRecords([]);
       }
@@ -125,6 +139,13 @@ export default function PatientDetailPage() {
     };
     void fetchInitialData();
   }, [user, loadData]);
+
+  const revokeAttachment = async (id: string) => {
+    const reason = window.prompt('Motivo de revocación del adjunto (mínimo 10 caracteres):');
+    if (!reason || reason.trim().length < 10) return;
+    try { await api.post(`/medical-records/attachments/${id}/revoke`, { reason }); await loadData(); }
+    catch { alert('No se pudo confirmar la revocación. Reintente.'); }
+  };
 
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -252,6 +273,7 @@ export default function PatientDetailPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      {user?.role === 'ADMIN' && <ClinicalAccessPanel patientId={patientId} />}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link
@@ -421,7 +443,7 @@ export default function PatientDetailPage() {
 
         {/* Columna Derecha: Historial Clínico */}
         <div className="lg:col-span-2">
-          {!canReadClinicalHistory ? (
+          {!canReadClinicalHistory || clinicalDenied ? (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-slate-400 min-h-100">
               <Lock size={48} className="text-slate-300 mb-4" />
               <p className="font-semibold text-lg text-slate-600">
@@ -488,6 +510,7 @@ export default function PatientDetailPage() {
                         </div>
                       )}
 
+                      {record.attachmentFiles?.map(file => <button key={file.id} type="button" className="text-red-700 text-xs mr-3" onClick={() => void revokeAttachment(file.id)}>Revocar adjunto</button>)}
                       {(record.missingAttachmentsCount ?? 0) > 0 && (
                         <p className="text-xs text-amber-600 italic mb-2">
                           Adjunto temporalmente no disponible en el almacenamiento.
