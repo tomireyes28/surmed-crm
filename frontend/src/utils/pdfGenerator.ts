@@ -34,13 +34,14 @@ async function loadLogoSafe(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
-export const generateInvoicePDF = async (
+export const buildInvoicePDF = async (
   invoice: Invoice,
-): Promise<{ logoLoaded: boolean }> => {
+): Promise<{ doc: jsPDF; logoLoaded: boolean }> => {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4',
+    compress: true,
   });
 
   const logoImg = await loadLogoSafe('/logo.png');
@@ -48,7 +49,18 @@ export const generateInvoicePDF = async (
 
   if (logoImg) {
     try {
-      doc.addImage(logoImg, 'PNG', 14, 10, 24, 24);
+      const ratio = logoImg.naturalWidth / logoImg.naturalHeight || 1;
+      const width = Math.min(26, 24 * ratio);
+      doc.addImage(
+        logoImg,
+        'PNG',
+        14,
+        10,
+        width,
+        width / ratio,
+        undefined,
+        'FAST',
+      );
       logoLoaded = true;
     } catch {
       logoLoaded = false;
@@ -69,7 +81,11 @@ export const generateInvoicePDF = async (
   doc.setFontSize(10);
   doc.setTextColor(100, 116, 139);
   doc.text('Centro Médico Integral — Asunción, Paraguay', headerX, 24);
-  doc.text(`Fecha de emisión: ${formatClinicDate(invoice.createdAt)}`, headerX, 30);
+  doc.text(
+    `Fecha de emisión: ${formatClinicDate(invoice.createdAt)}`,
+    headerX,
+    30,
+  );
   doc.text(`Comprobante Nº: ${invoiceCode}`, headerX, 36);
 
   // Aviso explícito de alcance no fiscal (SIFEN / DNIT)
@@ -136,6 +152,7 @@ export const generateInvoicePDF = async (
     head: [tableColumn],
     body: tableRows,
     startY: currentY,
+    rowPageBreak: 'avoid',
     theme: 'striped',
     headStyles: {
       fillColor: isCancelled ? [148, 163, 184] : [16, 185, 129],
@@ -151,7 +168,7 @@ export const generateInvoicePDF = async (
       overflow: 'linebreak',
       cellPadding: 3,
     },
-    margin: { left: 14, right: 14, bottom: 25 },
+    margin: { top: 28, left: 14, right: 14, bottom: 30 },
   });
 
   const lastTableY =
@@ -161,17 +178,58 @@ export const generateInvoicePDF = async (
 
   // Control de salto de página para que el total al pie nunca quede cortado (F21)
   let footerY = lastTableY + 12;
-  if (footerY + 20 > pageHeight) {
+  if (footerY > pageHeight - 32) {
     doc.addPage();
-    footerY = 25;
+    footerY = 38;
   }
 
   doc.setFontSize(13);
-  doc.setTextColor(isCancelled ? 148 : 15, isCancelled ? 163 : 23, isCancelled ? 184 : 42);
+  doc.setTextColor(
+    isCancelled ? 148 : 15,
+    isCancelled ? 163 : 23,
+    isCancelled ? 184 : 42,
+  );
   const totalLabel = isCancelled
     ? `Total (ANULADO): ${formatPYG(invoice.totalAmount)}`
     : `Total: ${formatPYG(invoice.totalAmount)}`;
   doc.text(totalLabel, 14, footerY);
+
+  const pages = doc.getNumberOfPages();
+  for (let page = 1; page <= pages; page++) {
+    doc.setPage(page);
+    if (page > 1) {
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`SURMED - ${invoiceCode}`, 14, 12);
+      doc.setTextColor(
+        isCancelled ? 185 : 71,
+        isCancelled ? 28 : 85,
+        isCancelled ? 28 : 105,
+      );
+      doc.text(statusMeta.label.toUpperCase(), 196, 12, { align: 'right' });
+      doc.setFontSize(8);
+      doc.text('Continuación del comprobante administrativo interno', 14, 18);
+    }
+    doc.setDrawColor(203, 213, 225);
+    doc.line(14, pageHeight - 20, 196, pageHeight - 20);
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      'Uso interno - No es factura electrónica SIFEN/DNIT.',
+      14,
+      pageHeight - 14,
+    );
+    doc.text(`Página ${page} de ${pages}`, 196, pageHeight - 14, {
+      align: 'right',
+    });
+  }
+  return { doc, logoLoaded };
+};
+
+export const generateInvoicePDF = async (
+  invoice: Invoice,
+): Promise<{ logoLoaded: boolean }> => {
+  const { doc, logoLoaded } = await buildInvoicePDF(invoice);
 
   const safeLastName = invoice.patient.lastName.replace(/[^a-zA-Z0-9_-]/g, '_');
   doc.save(

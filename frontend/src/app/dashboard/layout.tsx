@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/services/api';
+import { AccessibleModal } from '@/components/ui/AccessibleModal';
 import {
   Users,
   Package,
@@ -16,7 +17,6 @@ import {
   Shield,
   Stethoscope,
   KeyRound,
-  X,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { isAxiosError } from 'axios';
@@ -34,6 +34,7 @@ export default function DashboardLayout({
   const setUser = useAuthStore((state) => state.setUser);
   const logoutStore = useAuthStore((state) => state.logout);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState(false);
@@ -54,9 +55,13 @@ export default function DashboardLayout({
       router.replace('/');
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
-        logoutStore(); router.replace('/'); return;
+        logoutStore();
+        router.replace('/');
+        return;
       }
-      alert('No se pudo confirmar el cierre de sesión. Reintente antes de dejar el equipo.');
+      alert(
+        'No se pudo confirmar el cierre de sesión. Reintente antes de dejar el equipo.',
+      );
     }
   }, [logoutStore, router]);
 
@@ -146,7 +151,9 @@ export default function DashboardLayout({
         : 'No se pudo cambiar la contraseña.';
       setPasswordFeedback({
         type: 'error',
-        text: Array.isArray(msg) ? msg.join(', ') : msg || 'Error al actualizar la contraseña.',
+        text: Array.isArray(msg)
+          ? msg.join(', ')
+          : msg || 'Error al actualizar la contraseña.',
       });
     } finally {
       setIsChangingPassword(false);
@@ -201,18 +208,68 @@ export default function DashboardLayout({
   const visibleMenuItems = menuItems.filter(
     (item) => user && item.allowedRoles.includes(user.role),
   );
+  const currentModule = menuItems.find(
+    (item) =>
+      item.href !== '/dashboard' &&
+      (pathname === item.href || pathname.startsWith(`${item.href}/`)),
+  );
+  const canOpenPage =
+    !currentModule ||
+    Boolean(user && currentModule.allowedRoles.includes(user.role));
+  const menuLinks = visibleMenuItems.map((item) => {
+    const active =
+      item.href === '/dashboard'
+        ? pathname === item.href
+        : pathname === item.href || pathname.startsWith(`${item.href}/`);
+    const Icon = item.icon;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-label={item.name}
+        aria-current={active ? 'page' : undefined}
+        onClick={() => setMobileMenuOpen(false)}
+        className={`flex items-center gap-3 px-3 py-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${active ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+      >
+        <Icon size={20} className="shrink-0" />
+        <span
+          className={`${!isSidebarOpen ? 'md:hidden' : ''} whitespace-nowrap`}
+        >
+          {item.name}
+        </span>
+      </Link>
+    );
+  });
 
   if (!isMounted) return null;
-  if (sessionError) return <main className="max-w-md mx-auto my-16 p-6 space-y-4" role="alert"><p>No se pudo verificar la sesión. Compruebe la conexión y reintente.</p><button className="border rounded p-2" onClick={() => window.location.reload()}>Reintentar</button></main>;
-  if (!sessionReady) return <p role="status" className="p-6">Verificando sesión…</p>;
+  if (sessionError)
+    return (
+      <main className="max-w-md mx-auto my-16 p-6 space-y-4" role="alert">
+        <p>
+          No se pudo verificar la sesión. Compruebe la conexión y reintente.
+        </p>
+        <button
+          className="border rounded p-2"
+          onClick={() => window.location.reload()}
+        >
+          Reintentar
+        </button>
+      </main>
+    );
+  if (!sessionReady)
+    return (
+      <p role="status" className="p-6">
+        Verificando sesión…
+      </p>
+    );
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="h-dvh bg-slate-50 flex overflow-hidden">
       {/* Sidebar */}
       <aside
-        className={`bg-slate-900 text-white transition-all duration-300 ${
+        className={`hidden md:flex shrink-0 bg-slate-900 text-white transition-all duration-300 ${
           isSidebarOpen ? 'w-64' : 'w-20'
-        } flex flex-col`}
+        } flex-col overflow-y-auto`}
       >
         <div className="h-20 flex items-center justify-center border-b border-slate-800 py-3">
           <div className={`${!isSidebarOpen ? 'hidden' : 'block'}`}>
@@ -234,43 +291,30 @@ export default function DashboardLayout({
           </h2>
         </div>
 
-        <nav className="flex-1 py-6 flex flex-col gap-2 px-3">
-          {visibleMenuItems.map((item) => {
-            const isActive =
-              item.href === '/dashboard'
-                ? pathname === '/dashboard'
-                : pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <Icon size={20} className="shrink-0" />
-                <span
-                  className={`${!isSidebarOpen && 'hidden'} whitespace-nowrap`}
-                >
-                  {item.name}
-                </span>
-              </Link>
-            );
-          })}
+        <nav
+          aria-label="Navegación principal"
+          className="flex-1 py-6 flex flex-col gap-2 px-3"
+        >
+          {menuLinks}
         </nav>
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* Topbar */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
+        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="md:hidden p-2 text-slate-600"
+            aria-label="Abrir navegación"
+            aria-haspopup="dialog"
+          >
+            <Menu size={24} />
+          </button>
           <button
             onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className="text-slate-500 hover:text-slate-700 transition-colors"
+            className="hidden md:block p-2 text-slate-500 hover:text-slate-700 transition-colors"
             aria-label="Alternar menú lateral"
           >
             <Menu size={24} />
@@ -313,89 +357,123 @@ export default function DashboardLayout({
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-6 overflow-auto">{children}</main>
+        <main className="flex-1 min-h-0 p-4 md:p-6 overflow-auto">
+          {canOpenPage ? (
+            children
+          ) : (
+            <section
+              className="rounded-xl border border-slate-200 bg-white p-6 space-y-3"
+              role="alert"
+            >
+              <h1 className="text-xl font-bold">Acceso restringido</h1>
+              <p>Su rol no tiene permiso para acceder a este módulo.</p>
+              <Link
+                href="/dashboard"
+                className="inline-block text-blue-700 underline"
+              >
+                Volver al dashboard
+              </Link>
+            </section>
+          )}
+        </main>
       </div>
 
+      <AccessibleModal
+        isOpen={isMobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        title="Navegación"
+        titleId="mobile-navigation-title"
+        maxWidthClass="max-w-sm"
+      >
+        <nav
+          aria-label="Navegación móvil"
+          className="bg-slate-900 p-3 flex flex-col gap-2"
+        >
+          {menuLinks}
+        </nav>
+      </AccessibleModal>
+
       {/* Modal de cambio de contraseña */}
-      {isPasswordModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <KeyRound size={20} className="text-blue-600" />
-                Cambiar Contraseña
-              </h3>
-              <button
-                onClick={() => setIsPasswordModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
-                aria-label="Cerrar ventana"
+      <AccessibleModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+        title="Cambiar Contraseña"
+        titleId="password-dialog-title"
+        isDirty={Boolean(currentPassword || newPassword)}
+        maxWidthClass="max-w-md"
+      >
+        <div className="p-6">
+          {passwordFeedback && (
+            <div
+              className={`mb-4 p-3 rounded-lg text-sm ${
+                passwordFeedback.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}
+            >
+              {passwordFeedback.text}
+            </div>
+          )}
+
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div>
+              <label
+                htmlFor="current-password"
+                className="block text-sm font-medium text-slate-700 mb-1"
               >
-                <X size={20} />
-              </button>
+                Contraseña actual
+              </label>
+              <input
+                id="current-password"
+                autoComplete="current-password"
+                type="password"
+                required
+                minLength={6}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
             </div>
 
-            {passwordFeedback && (
-              <div
-                className={`mb-4 p-3 rounded-lg text-sm ${
-                  passwordFeedback.type === 'success'
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-red-50 text-red-700 border border-red-200'
-                }`}
+            <div>
+              <label
+                htmlFor="new-password"
+                className="block text-sm font-medium text-slate-700 mb-1"
               >
-                {passwordFeedback.text}
-              </div>
-            )}
+                Nueva contraseña (mín. 8 caracteres)
+              </label>
+              <input
+                id="new-password"
+                autoComplete="new-password"
+                type="password"
+                required
+                minLength={8}
+                maxLength={72}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
 
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Contraseña actual
-                </label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Nueva contraseña (mín. 8 caracteres)
-                </label>
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  maxLength={72}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPasswordModalOpen(false)}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isChangingPassword}
-                  className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium transition-colors disabled:bg-blue-400"
-                >
-                  {isChangingPassword ? 'Actualizando...' : 'Actualizar Clave'}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsPasswordModalOpen(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isChangingPassword}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium transition-colors disabled:bg-blue-400"
+              >
+                {isChangingPassword ? 'Actualizando...' : 'Actualizar Clave'}
+              </button>
+            </div>
+          </form>
         </div>
-      )}
+      </AccessibleModal>
     </div>
   );
 }

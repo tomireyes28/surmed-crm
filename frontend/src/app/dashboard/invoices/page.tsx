@@ -367,7 +367,7 @@ export default function InvoicesPage() {
                             </button>
                           )}
 
-                          {!isCancelled && (
+                          {isPending && (
                             <button
                               type="button"
                               onClick={() =>

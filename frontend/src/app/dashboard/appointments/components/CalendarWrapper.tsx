@@ -177,8 +177,9 @@ export function CalendarWrapper({
         onSelectEvent={handleSelectEvent}
         step={15}
         timeslots={2}
-        min={new Date(0, 0, 0, 8, 0, 0)}
-        max={new Date(0, 0, 0, 20, 0, 0)}
+        min={new Date(1970, 0, 1, 8, 0, 0)}
+        max={new Date(1970, 0, 1, 20, 0, 0)}
+        scrollToTime={new Date(1970, 0, 1, 8, 0, 0)}
       />
 
       <AccessibleModal

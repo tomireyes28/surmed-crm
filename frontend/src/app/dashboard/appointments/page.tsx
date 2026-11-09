@@ -15,7 +15,7 @@ export default function AppointmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [view, setView] = useState<View>('week');
+  const [view, setView] = useState<View>(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches ? 'day' : 'week');
   const [date, setDate] = useState(() => toClinicCalendarDate(new Date()));
   const requestVersion = useRef(0);
   const { from, to } = getCalendarRange(date, view);
@@ -66,6 +66,7 @@ export default function AppointmentsPage() {
           type="button"
           className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2"
           onClick={() => setIsModalOpen(true)}
+          aria-label="Nuevo turno"
         >
           <Plus size={20} />
           <span className="hidden sm:inline">Nuevo Turno</span>

@@ -311,6 +311,7 @@ export default function PatientDetailPage() {
         <button
           type="button"
           onClick={() => setIsAppointmentModalOpen(true)}
+          aria-label="Nuevo turno para este paciente"
           className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm"
         >
           <CalendarPlus size={20} />
@@ -541,6 +542,7 @@ export default function PatientDetailPage() {
                             >
                               <textarea
                                 value={addendumText}
+                                aria-label="Texto de la adenda"
                                 onChange={(e) =>
                                   setAddendumText(e.target.value)
                                 }
@@ -569,7 +571,7 @@ export default function PatientDetailPage() {
                                 >
                                   {isSubmittingAddendum
                                     ? 'Guardando...'
-                                    : 'Firmar Adenda'}
+                                    : 'Guardar adenda'}
                                 </button>
                               </div>
                             </form>
