@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
+import { assertNewPassword } from '../src/auth/password-policy';
 
 /**
  * Seed exclusivamente de DEMOSTRACIÓN (datos sintéticos e idempotentes).
@@ -9,7 +10,10 @@ import * as bcrypt from 'bcrypt';
  * - Para importar el inventario comercial desde Excel usar: npm run import:inventory
  */
 async function main() {
-  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_SEED !== 'true') {
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.ALLOW_DEMO_SEED !== 'true'
+  ) {
     throw new Error(
       'El seed de demostración está bloqueado en producción. Use provision:admin o import:inventory.',
     );
@@ -25,12 +29,15 @@ async function main() {
   const prisma = new PrismaClient({ adapter });
 
   try {
-    console.log('🌱 Sembrando datos sintéticos de demostración (idempotente)...');
+    console.log(
+      '🌱 Sembrando datos sintéticos de demostración (idempotente)...',
+    );
 
     const demoRawPassword = process.env.SEED_DEMO_PASSWORD || 'DemoSurmed2026!';
     if (demoRawPassword.length < 8) {
       throw new Error('SEED_DEMO_PASSWORD debe tener al menos 8 caracteres.');
     }
+    assertNewPassword(demoRawPassword);
     const hashedDemoPassword = await bcrypt.hash(demoRawPassword, 10);
 
     // 1. Especialidades
@@ -240,7 +247,9 @@ async function main() {
       });
     }
 
-    console.log('✅ Sembrado sintético de demostración finalizado sin duplicados.');
+    console.log(
+      '✅ Sembrado sintético de demostración finalizado sin duplicados.',
+    );
   } finally {
     await prisma.$disconnect();
     await pool.end();

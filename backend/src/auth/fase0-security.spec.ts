@@ -15,6 +15,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { RolesGuard } from './guards/roles.guard';
 import { TokenRevocationService } from './token-revocation.service';
+import { sessionStore } from '../../test/helpers/session-store';
 import { LoginRateLimitService } from './login-rate-limit.service';
 import { UsersService } from '../users/users.service';
 import { UsersController } from '../users/users.controller';
@@ -122,11 +123,12 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
         },
       };
 
-      const revocation = new TokenRevocationService();
+      const revocation = new TokenRevocationService(sessionStore() as never);
       const rateLimit = new LoginRateLimitService();
       const usersService = new UsersService(prismaMock as never, revocation);
       const jwtService = new JwtService({
         secret: 'test_secret_with_at_least_16_chars',
+        signOptions: { expiresIn: '8h' },
       });
       const authService = new AuthService(
         prismaMock as never,
@@ -435,7 +437,7 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
     });
 
     it('revoca el JWT al hacer logout y rechaza peticiones posteriores en JwtStrategy', async () => {
-      const revocation = new TokenRevocationService();
+      const revocation = new TokenRevocationService(sessionStore() as never);
       const configService = new ConfigService({
         JWT_SECRET: 'clave_produccion_segura_2026_surmed',
       });
@@ -465,12 +467,17 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
         iat: Math.floor(Date.now() / 1000),
       };
 
+      await revocation.registerIssuedToken(
+        payload.sub,
+        payload.jti,
+        new Date(Date.now() + 3600000),
+      );
       // Antes del logout es válido
       const validated = await strategy.validate(payload);
       expect(validated.id).toBe('user-1');
 
       // Al cerrar sesión se revoca el jti
-      revocation.revokeToken('token-jti-123');
+      await revocation.revokeToken('token-jti-123');
 
       await expect(strategy.validate(payload)).rejects.toThrow(
         UnauthorizedException,
@@ -487,7 +494,7 @@ describe('Fase 0 — Seguridad, Credenciales, Autorización y Sesión (T01, T02,
       const authService = new AuthService(
         prismaMock as never,
         new JwtService({ secret: 'clave_produccion_segura_2026_surmed' }),
-        new TokenRevocationService(),
+        new TokenRevocationService(sessionStore() as never),
         rateLimit,
       );
 

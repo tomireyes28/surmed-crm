@@ -10,6 +10,7 @@ import { Role } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
+import { assertNewPassword } from '../auth/password-policy';
 import { TokenRevocationService } from '../auth/token-revocation.service';
 
 export const PUBLIC_USER_SELECT = {
@@ -93,6 +94,7 @@ export class UsersService {
       throw new ConflictException('Ya existe un usuario con este email.');
     }
 
+    assertNewPassword(data.password);
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
     return await this.prisma.user.create({
@@ -175,8 +177,9 @@ export class UsersService {
           'La contraseña debe tener al menos 8 caracteres.',
         );
       }
+      assertNewPassword(data.password);
       updatePayload.password = await bcrypt.hash(data.password, 10);
-      this.tokenRevocationService?.revokeAllForUser(id);
+      await this.tokenRevocationService?.revokeAllForUser(id);
     }
 
     return await this.prisma.user.update({
@@ -202,7 +205,7 @@ export class UsersService {
       }
     }
 
-    this.tokenRevocationService?.revokeAllForUser(id);
+    await this.tokenRevocationService?.revokeAllForUser(id);
     return await this.prisma.user.update({
       where: { id },
       data: { isActive: false },

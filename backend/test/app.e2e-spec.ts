@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { AppModule } from '../src/app.module';
+import { sessionStore } from './helpers/session-store';
 import {
   assertDisposableTestDatabaseUrl,
   configureApp,
@@ -147,6 +148,7 @@ interface TestAuditLog {
  * requeridas por los módulos de negocio de Surmed CRM.
  */
 class DisposableInMemoryPrisma {
+  readonly authSession = sessionStore().authSession;
   readonly specialties = new Map<string, TestSpecialty>();
   readonly users = new Map<string, TestUser>();
   readonly patients = new Map<string, TestPatient>();

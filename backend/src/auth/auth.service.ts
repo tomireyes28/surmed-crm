@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import * as bcrypt from 'bcrypt';
+import { assertNewPassword, assertPasswordByteLimit } from './password-policy';
 import { randomUUID } from 'node:crypto';
 import { TokenRevocationService } from './token-revocation.service';
 import { LoginRateLimitService } from './login-rate-limit.service';
@@ -18,13 +19,14 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-    @Optional() private tokenRevocationService?: TokenRevocationService,
+    private tokenRevocationService: TokenRevocationService,
     @Optional() private loginRateLimitService?: LoginRateLimitService,
   ) {}
 
   async login(loginDto: LoginDto, clientIp?: string) {
     const email = loginDto.email.trim().toLowerCase();
     const { password } = loginDto;
+    assertPasswordByteLimit(password);
 
     this.loginRateLimitService?.assertAllowed(email, clientIp);
 
@@ -34,7 +36,9 @@ export class AuthService {
 
     if (!user || !user.isActive) {
       this.loginRateLimitService?.recordFailure(email, clientIp);
-      throw new UnauthorizedException('Credenciales incorrectas o usuario inactivo');
+      throw new UnauthorizedException(
+        'Credenciales incorrectas o usuario inactivo',
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -46,13 +50,23 @@ export class AuthService {
     this.loginRateLimitService?.reset(email, clientIp);
 
     const jti = randomUUID();
-    this.tokenRevocationService?.registerIssuedToken(user.id, jti);
     const payload = {
       sub: user.id,
       email: user.email,
       role: user.role,
       jti,
     };
+
+    const backendToken = await this.jwtService.signAsync(payload);
+    const { exp } = this.jwtService.decode<{ exp?: number }>(backendToken);
+    if (typeof exp !== 'number' || !Number.isFinite(exp)) {
+      throw new Error('El JWT debe tener una fecha de expiración.');
+    }
+    await this.tokenRevocationService.registerIssuedToken(
+      user.id,
+      jti,
+      new Date(exp * 1000),
+    );
 
     return {
       user: {
@@ -61,15 +75,15 @@ export class AuthService {
         email: user.email,
         role: user.role,
       },
-      backendToken: await this.jwtService.signAsync(payload),
+      backendToken,
     };
   }
 
-  logout(userId: string, jti?: string) {
+  async logout(userId: string, jti?: string) {
     if (jti) {
-      this.tokenRevocationService?.revokeToken(jti);
+      await this.tokenRevocationService.revokeToken(jti);
     } else {
-      this.tokenRevocationService?.revokeAllForUser(userId);
+      await this.tokenRevocationService.revokeAllForUser(userId);
     }
     return { message: 'Sesión cerrada correctamente' };
   }
@@ -95,6 +109,8 @@ export class AuthService {
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {
+    assertPasswordByteLimit(dto.currentPassword);
+    assertNewPassword(dto.newPassword);
     if (dto.currentPassword === dto.newPassword) {
       throw new BadRequestException(
         'La nueva contraseña debe ser diferente de la actual.',
@@ -109,7 +125,10 @@ export class AuthService {
       throw new UnauthorizedException('Usuario no válido o inactivo');
     }
 
-    const isCurrentValid = await bcrypt.compare(dto.currentPassword, user.password);
+    const isCurrentValid = await bcrypt.compare(
+      dto.currentPassword,
+      user.password,
+    );
     if (!isCurrentValid) {
       throw new UnauthorizedException('La contraseña actual es incorrecta');
     }
@@ -122,7 +141,7 @@ export class AuthService {
       select: { id: true },
     });
 
-    this.tokenRevocationService?.revokeAllForUser(userId);
+    await this.tokenRevocationService.revokeAllForUser(userId);
 
     return { message: 'Contraseña actualizada correctamente' };
   }

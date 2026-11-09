@@ -2,11 +2,14 @@ import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
+import { assertNewPassword } from '../src/auth/password-policy';
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error('DATABASE_URL es obligatorio para aprovisionar el administrador.');
+    throw new Error(
+      'DATABASE_URL es obligatorio para aprovisionar el administrador.',
+    );
   }
 
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
@@ -23,6 +26,7 @@ async function main() {
     throw new Error('ADMIN_PASSWORD debe tener al menos 8 caracteres.');
   }
 
+  assertNewPassword(adminPassword);
   const pool = new Pool({ connectionString });
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
@@ -65,7 +69,9 @@ async function main() {
 
 main().catch((error) => {
   console.error(
-    error instanceof Error ? error.message : 'Error al aprovisionar administrador',
+    error instanceof Error
+      ? error.message
+      : 'Error al aprovisionar administrador',
   );
   process.exit(1);
 });

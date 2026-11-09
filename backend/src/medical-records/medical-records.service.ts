@@ -48,6 +48,19 @@ export class MedicalRecordsService {
     let attachmentPath: string | null = null;
     let uploadedMetadata: UploadedClinicalFileResult | null = null;
 
+    // A foreign key alone does not ensure the parent belongs to this patient.
+    if (dto.parentRecordId) {
+      const parent = await this.prisma.medicalRecord.findUnique({
+        where: { id: dto.parentRecordId },
+        select: { id: true, patientId: true },
+      });
+      if (!parent || parent.patientId !== dto.patientId) {
+        throw new BadRequestException(
+          'La evolución original no pertenece al paciente indicado.',
+        );
+      }
+    }
+
     if (file) {
       // Validación previa de contenido real (magic bytes), MIME y tamaño (T11 / S07)
       if (typeof this.storage.uploadValidatedFile === 'function') {
@@ -184,11 +197,7 @@ export class MedicalRecordsService {
     return addendum;
   }
 
-  async findByPatient(
-    patientId: string,
-    actorId?: string,
-    actorRole?: string,
-  ) {
+  async findByPatient(patientId: string, actorId?: string, actorRole?: string) {
     const patient = await this.prisma.patient.findUnique({
       where: { id: patientId },
       select: { id: true },

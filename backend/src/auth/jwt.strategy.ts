@@ -1,4 +1,4 @@
-import { Injectable, Optional, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -11,7 +11,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
-    @Optional() private tokenRevocationService?: TokenRevocationService,
+    private tokenRevocationService: TokenRevocationService,
   ) {
     const secret = configService.getOrThrow<string>('JWT_SECRET');
     super({
@@ -22,13 +22,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
-    if (
-      this.tokenRevocationService?.isRevoked(
-        payload.jti,
-        payload.sub,
-        payload.iat,
-      )
-    ) {
+    if (await this.tokenRevocationService.isRevoked(payload.jti, payload.sub)) {
       throw new UnauthorizedException('Sesión revocada o expirada');
     }
 

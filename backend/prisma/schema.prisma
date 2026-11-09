@@ -20,6 +20,7 @@ model User {
   name           String
   role           Role            @default(RECEPCION)
   isActive       Boolean         @default(true)
+  sessions       AuthSession[]
   
   medicalRecords MedicalRecord[] 
   stockMovements StockMovement[] 
@@ -31,6 +32,19 @@ model User {
   updatedAt      DateTime        @updatedAt
 
   @@map("users")
+}
+
+model AuthSession {
+  jti       String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("auth_sessions")
 }
 
 model Patient {
