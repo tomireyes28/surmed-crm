@@ -1,10 +1,14 @@
 name: Surmed CRM — CI (Calidad, Contratos y Seguridad)
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, master, develop]
   pull_request:
     branches: [main, master, develop]
+
+permissions:
+  contents: read
 
 jobs:
   backend:
@@ -38,6 +42,9 @@ jobs:
 
       - name: Unit & Domain Tests
         run: npm test -- --runInBand
+
+      - name: HTTP regression (isolated Prisma and Storage doubles)
+        run: npm run test:e2e -- --runInBand
 
       - name: Production Build & Entrypoint Verification
         run: |
@@ -73,8 +80,70 @@ jobs:
       - name: Typecheck (Contratos API y Componentes)
         run: npm run typecheck
 
+      - name: Calendar and civil dates in different timezones
+        run: npm test
+
       - name: Production Build
         run: npm run build
 
       - name: Production Dependency Audit (Critical/High)
         run: npm audit --omit=dev --audit-level=high
+
+  integration:
+    name: PostgreSQL, migration upgrade and production BFF
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_USER: surmed_test
+          POSTGRES_PASSWORD: synthetic_ci_only
+          POSTGRES_DB: surmed_integrity_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U surmed_test -d surmed_integrity_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://surmed_test:synthetic_ci_only@127.0.0.1:5432/surmed_integrity_test
+      INTEGRITY_TEST_DATABASE_URL: postgresql://surmed_test:synthetic_ci_only@127.0.0.1:5432/surmed_integrity_test
+      SECURITY_TEST_DATABASE_URL: postgresql://surmed_test:synthetic_ci_only@127.0.0.1:5432/surmed_security_test
+      DELIVERY_TEST_DATABASE_URL: postgresql://surmed_test:synthetic_ci_only@127.0.0.1:5432/surmed_delivery_test
+      TEST_BFF: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Clean dependency installation
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix frontend
+      - name: Create isolated test databases
+        working-directory: backend
+        run: |
+          node -e 'const {Client}=require("pg"); (async()=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();try{await c.query("CREATE DATABASE surmed_security_test");await c.query("CREATE DATABASE surmed_delivery_test");}finally{await c.end();}})().catch(e=>{console.error(e);process.exitCode=1})'
+      - name: Build actual production servers
+        run: |
+          npm run build --prefix backend
+          npm run build --prefix frontend
+      - name: Fresh migrations and integrity regression
+        working-directory: backend
+        run: |
+          npx prisma migrate deploy
+          npm run test:postgres
+      - name: Security regression with production Next BFF
+        working-directory: backend
+        run: |
+          DATABASE_URL="$SECURITY_TEST_DATABASE_URL" npx prisma migrate deploy
+          npm run test:security
+      - name: Upgrade existing data and query/date integration
+        working-directory: backend
+        run: npm run test:delivery

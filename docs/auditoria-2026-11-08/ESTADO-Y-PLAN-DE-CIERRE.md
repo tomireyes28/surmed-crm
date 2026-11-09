@@ -4,6 +4,8 @@
 
 > Etapa 2: política clínica y recuperación aprobadas por el usuario e implementadas, sesiones HttpOnly, límites persistentes y descargas revocables. Ver [Etapa 2 implementada](ETAPA-2-IMPLEMENTADA.md) para las pruebas ejecutadas y los pendientes operativos. El diagnóstico histórico de R04/R06 de abajo ya no describe el código actual. El próximo trabajo es la etapa 3; los privilegios del rol de base y las políticas reales de Supabase todavía requieren validación en staging.
 
+> Etapa 3: implementados los límites y paginación de agenda/historias/inventario, calendario en hora del centro, validación estricta de fechas, CI con PostgreSQL/HTTP/BFF y actualización con datos previos, y documentación operativa corregida. Ver [Etapa 3 implementada](ETAPA-3-IMPLEMENTADA.md). Las filas y estimaciones históricas siguientes se conservan como diagnóstico; no reabren las correcciones de las etapas 1–3. Pendientes de entrega: staging/Supabase, revisión visual/PDF y aceptación/piloto, sin acreditar despliegue por las pruebas locales.
+
 Fecha: 8 de noviembre de 2026. Commit revisado: `38829d3380a95dfd391ce1a0957a9fea14740c9c`. Árbol de trabajo limpio antes de la revisión. Esta intervención agrega documentación y reproducciones; no modifica la aplicación.
 
 ## Dictamen

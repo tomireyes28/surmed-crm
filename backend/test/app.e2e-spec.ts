@@ -1733,7 +1733,7 @@ describe('Fase 5 — Matriz de Aceptación E2E (Bootstrap Real)', () => {
         (addendumRes.body as { parentRecordId: string }).parentRecordId,
       ).toBe(mainRecordId);
 
-      // Lectura de historia clínica devuelve URL firmada temporal y registra auditoría
+      // Lectura clínica devuelve enlace autorizado de aplicación y registra auditoría
       const listRes = await request(app.getHttpServer())
         .get(`/medical-records/patient/${patientId}`)
         .set('Authorization', `Bearer ${doctorToken}`)

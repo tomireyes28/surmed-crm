@@ -1,36 +1,23 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Surmed — Web Next.js
 
-## Getting Started
+Next.js App Router y React, con BFF del mismo origen en `/api/backend`. Requiere Node.js >=22. El navegador no recibe el JWT de login en JSON: Next lo conserva en cookie HttpOnly. La API sigue autorizando cada operación.
 
-First, run the development server:
+Copiar `.env.example` a `.env.local`, configurando `API_URL` (URL del backend accesible desde Next) y `APP_ORIGIN` (origen público exacto de la web).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```powershell
+npm ci
+npm run dev -- --port 3001
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+En producción usar HTTPS, `APP_ORIGIN` con el origen HTTPS correcto, `npm run build` y `npm run start -- --port 3001`. Sin origen configurado se rechazan las escrituras. El build descarga Geist mediante next/font/google; requiere conexión de salida durante compilación.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`npm test` ejecuta las utilidades reales de calendario y fecha civil en UTC, Los Ángeles, Berlín y Kiritimati, incluyendo cambios estacionales y cambio de día en Paraguay. La proyección de fechas del calendario solo se usa para presentar campos civiles; los turnos se guardan con el instante original y no con esa proyección.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Ver [README raíz](../README.md) y [etapa 3](../docs/auditoria-2026-11-08/ETAPA-3-IMPLEMENTADA.md). La prueba del BFF con PostgreSQL se ejecuta desde backend con `TEST_BFF=1` después de compilar ambos proyectos. No equivale a QA visual de navegador o revisión del PDF.

@@ -1,6 +1,6 @@
 # Procedimiento Operativo, Archivos Clínicos, Backups y Continuidad (Fase 3 · T11, T12 y T13)
 
-Fecha de actualización: 4 de noviembre de 2026.
+Fecha de actualización: 8 de noviembre de 2026. Procedimiento propuesto; no acredita que el entorno del cliente haya sido desplegado, restaurado o aceptado.
 
 ---
 
@@ -19,26 +19,30 @@ Fecha de actualización: 4 de noviembre de 2026.
    - Cualquier archivo cuyo contenido binario no coincida con su extensión/MIME declarado se rechaza con `400 Bad Request` antes de contactar a Supabase Storage.
 3. **Metadatos verificados y compensación automática:**
    - Cada adjunto se almacena bajo una ruta generada con UUID (`<patientId>/<uuid>.<ext>`) y registra en `medical_attachments` su tamaño, `mimeType`, `sha256`, autor (`uploadedById`), paciente y estado de verificación (`CLEAN_MAGIC_VERIFIED`).
-   - Si la creación de la evolución clínica en PostgreSQL falla después de subir el archivo a Storage, el backend ejecuta inmediatamente `storage.removeFile(path)` para evitar archivos huérfanos.
-4. **URLs firmadas de corta duración y configuración del Bucket:**
+   - Evolución, metadatos y auditoría se confirman juntos. Ante fallo se comprueba primero si el commit quedó confirmado antes de eliminar el objeto. Si no se puede confirmar ni compensar, se conserva para conciliación y se registra el fallo.
+   - `CLEAN_MAGIC_VERIFIED` describe validación de formato; no es análisis antivirus.
+4. **Descarga autorizada y configuración del Bucket:**
    - El bucket `medical-records` en Supabase debe estar configurado como **`public: false` (Privado)**.
-   - El acceso de lectura ocurre exclusivamente mediante URLs firmadas temporales (`DEFAULT_SIGNED_URL_TTL_SECONDS = 900`, 15 minutos) emitidas tras verificar que el usuario autenticado posee rol `MEDICO` o `ADMIN`.
+   - La web descarga por `/api/backend/medical-records/attachments/:id/content`. La API verifica sesión, rol MEDICO, asignación o turno propio y estado no revocado en cada solicitud. ADMIN gestiona accesos sin leer historias. El backend comprueba que el bucket sea privado; deben verificarse también las políticas remotas contra accesos ajenos a la aplicación.
+   - Las URLs firmadas de la versión anterior siguen válidas hasta su vencimiento original. Una descarga ya iniciada o copia local no se puede revocar remotamente.
 
 ---
 
 ## 2. Auditoría Clínica, Adendas e Inmutabilidad (`T12` / `S08`)
 
-1. **Inmutabilidad de evoluciones firmadas:**
+1. **Correcciones sin sobrescritura por API:**
    - Las evoluciones clínicas (`MedicalRecord`) no poseen endpoint de edición (`PATCH`) ni borrado (`DELETE`).
    - Toda corrección o ampliación posterior se registra como una **adenda** vinculada (`parentRecordId`) mediante `POST /medical-records/:id/addendum`, conservando autor, fecha/hora y el texto original intacto.
 2. **Registro de auditoría (`audit_logs`):**
    - Se registran automáticamente con `actorId`, `actorRole`, `action`, `resource`, `resourceId`, `patientId`, `reason` y `createdAt`:
      - `MEDICAL_RECORD_READ` (consulta de historia clínica de un paciente)
      - `MEDICAL_RECORD_CREATE` (alta de evolución clínica y hash SHA-256 de adjunto)
-     - `MEDICAL_RECORD_ADDENDUM` (firma de adenda aclaratoria)
+     - `MEDICAL_RECORD_ADDENDUM` (registro de adenda aclaratoria)
      - `INVOICE_PAY` (registro de cobro de comprobante)
      - `INVOICE_CANCEL` (anulación de comprobante con motivo)
    - El endpoint `GET /audit-logs` está restringido a `ADMIN` y no expone operaciones de modificación ni borrado.
+   - No hay firma digital ni inmutabilidad frente a administradores/credenciales privilegiadas de PostgreSQL. Configurar privilegios mínimos y conservación en el despliegue; no usar el rol migrador como rol ordinario sin evaluar sus permisos.
+   - Asignaciones, recuperación y lectura/revocación de adjuntos generan sus eventos de auditoría; no contienen el token de recuperación en claro.
 3. **Redacción en logs y observabilidad:**
    - [`redactSensitiveData`](../../backend/src/common/logger/structured-logger.ts) redacta `password`, `token`, `authorization`, `notes` y secretos antes de cualquier log o metadato.
    - `GET /health` reporta liveness y `GET /health/ready` verifica conectividad real con PostgreSQL (`SELECT 1`), devolviendo `503 Service Unavailable` ante caídas de base de datos.
@@ -48,7 +52,9 @@ Fecha de actualización: 4 de noviembre de 2026.
 ## 3. Backups, Restauración Aislada y Conciliación (`T13`)
 
 ### Parámetros operativos de recuperación (RPO / RTO)
-| Parámetro | Objetivo acordado | Mecanismo |
+Los siguientes valores son objetivos propuestos pendientes de aprobación por Surmed y de medición mediante un simulacro real. El verificador de referencias no sustituye restaurar base y archivos.
+
+| Parámetro | Objetivo propuesto, no medido | Mecanismo |
 | :--- | :--- | :--- |
 | **RPO (Pérdida máxima tolerable de datos)** | **<= 24 horas** (base diaria) / **<= 1 hora** con WAL/PITR activo en el proveedor PostgreSQL | Respaldo diario automatizado + exportación previa a cada ventana de mantenimiento. |
 | **RTO (Tiempo objetivo de recuperación)** | **<= 2 horas** | Restauración de base PostgreSQL + verificación de objetos en Storage + despliegue reproducible (`npm ci && npx prisma migrate deploy && npm run build`). |
