@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-09",
+  "target": "Configured matching Supabase staging project",
+  "migrationCount": 13,
+  "rls": {
+    "total": 17,
+    "protected": 17
+  },
+  "publicRoleTableGrants": 0,
+  "runtimeRole": {
+    "rolname": "surmed_app",
+    "rolcanlogin": true,
+    "rolsuper": false,
+    "rolcreatedb": false,
+    "rolcreaterole": false,
+    "rolinherit": false,
+    "rolreplication": false,
+    "rolbypassrls": false
+  },
+  "bucket": {
+    "id": "medical-records",
+    "public": false,
+    "file_size_limit": "10485760",
+    "allowed_mime_types": [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp"
+    ]
+  },
+  "storage": {
+    "objects": 4,
+    "metadata": 4,
+    "missing_objects": 0,
+    "orphan_objects": 0
+  },
+  "dataApiUsersWithStorageKeyStatus": 403,
+  "realIntegrationChecksPassed": 14,
+  "localIntegrityChecksPassed": 19,
+  "localPermissionsCheckPassed": true,
+  "localSecurityChecksPassed": 18,
+  "localDeliveryChecksPassed": 6
+}

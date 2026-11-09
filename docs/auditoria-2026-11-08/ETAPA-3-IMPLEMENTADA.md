@@ -1,5 +1,7 @@
 # Etapa 3 — consultas, fechas, CI y documentación
 
+> Seguimiento Supabase, 09/11: también se completó la integración real que este documento señalaba pendiente. Ver [Supabase staging](../auditoria-2026-11-09/SUPABASE-STAGING.md): 13 migraciones, permisos limitados y adjuntos reales verificados. El resto del documento conserva los resultados de su fecha original.
+
 > Seguimiento del 09/11: completada la revisión local de navegador y PDF de tres roles, con correcciones y capturas. Ver [Revisión visual y PDF](../auditoria-2026-11-09/QA-VISUAL-Y-PDF.md). La mención a QA pendiente al final de este documento conserva el estado previo a esa revisión; Supabase remoto, dispositivos físicos y aceptación del centro siguen pendientes.
 
 Fecha: 8 de noviembre de 2026. Base: `8f4c289` (etapa 2). Rama `codex/etapa-1-integridad`; trabajo local sin push. No se usaron datos del cliente ni credenciales de Supabase real.

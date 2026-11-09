@@ -168,3 +168,5 @@ npm run build
 - CI comprueba HTTP, fechas en cuatro zonas, migraciones desde cero, actualización con datos previos e integridad/seguridad con PostgreSQL y BFF de producción. El trabajo local sin push no ejecuta GitHub Actions remoto.
 
 Ver [etapa 3: cambios, pruebas y pendientes de entrega](docs/auditoria-2026-11-08/ETAPA-3-IMPLEMENTADA.md) y [procedimiento operativo](docs/auditoria-2026-11-04/OPERACION-Y-CONTINUIDAD.md).
+
+**Actualización del 09/11:** el proyecto Supabase restaurado se reconstruyó como entorno de pruebas y pasó la [integración real de base y adjuntos](docs/auditoria-2026-11-09/SUPABASE-STAGING.md). Tiene 13 migraciones, RLS y permisos cerrados a Data API, backend con rol limitado y Storage privado. Para ese entorno, ejecutar migraciones con `npx prisma migrate deploy --config prisma.migrate.config.ts`; la conexión administradora está separada de DATABASE_URL. Las credenciales no están en Git. La restauración de respaldo, el despliegue productivo y el piloto siguen pendientes.
