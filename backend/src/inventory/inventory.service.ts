@@ -52,7 +52,17 @@ export class InventoryService {
     search?: string,
     category?: string,
     includeInactive: boolean = false,
+    pagination?: { skip: number; take: number },
   ) {
+    if (search !== undefined && typeof search !== 'string')
+      throw new BadRequestException('La búsqueda debe ser texto.');
+    if (
+      category &&
+      !['TODOS', 'INSUMO_MEDICO', 'OFICINA', 'ACTIVO_FIJO'].includes(category)
+    )
+      throw new BadRequestException('Categoría no válida.');
+    if (search && search.length > 200)
+      throw new BadRequestException('La búsqueda admite hasta 200 caracteres.');
     const trimmedSearch = search?.trim();
     const whereClause: Prisma.ProductWhereInput = {
       ...(includeInactive ? {} : { isActive: true }),
@@ -71,10 +81,33 @@ export class InventoryService {
 
     const products = await this.prisma.product.findMany({
       where: whereClause,
-      orderBy: { name: 'asc' },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      skip: pagination?.skip ?? 0,
+      take: pagination?.take ?? 101,
     });
 
+    if (!pagination && products.length > 100)
+      throw new BadRequestException(
+        'Use el inventario paginado: /inventory/products/page.',
+      );
     return products.map((product) => this.serializeProduct(product));
+  }
+
+  async findProductPage(
+    page: number,
+    limit: number,
+    search?: string,
+    category?: string,
+    includeInactive = false,
+  ) {
+    const rows = await this.findAllProducts(search, category, includeInactive, {
+      skip: (page - 1) * limit,
+      take: limit + 1,
+    });
+    return {
+      data: rows.slice(0, limit),
+      meta: { page, limit, hasMore: rows.length > limit },
+    };
   }
 
   // 3. Traer un solo producto

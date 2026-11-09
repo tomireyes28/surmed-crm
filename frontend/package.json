@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit --incremental false"
+    "typecheck": "next typegen && tsc --noEmit --incremental false",
+    "test": "node --test test/calendar.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { inventoryService } from '@/services/inventory.service';
 import { Product } from '@/schemas/inventory.schema';
 import {
@@ -18,6 +18,7 @@ import { NewProductModal } from './NewProductModal';
 import { StockMovementModal } from './StockMovementModal';
 import { ErrorAlert } from '@/components/ui/PageState';
 import { PRODUCT_CATEGORY_LABELS } from '@/utils/domain-rules';
+import { PageNavigation } from '@/components/ui/PageNavigation';
 
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -27,6 +28,14 @@ export default function InventoryPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [activeCategory, setActiveCategory] = useState<string>('TODOS');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [search, setSearch] = useState('');
+  const requestVersion = useRef(0);
+  useEffect(() => {
+    const timer = setTimeout(() => { setSearch(searchTerm); setPage(1); }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const [isNewProductOpen, setIsNewProductOpen] = useState(false);
   const [isMovementOpen, setIsMovementOpen] = useState(false);
@@ -40,20 +49,26 @@ export default function InventoryPage() {
   });
 
   const fetchProducts = useCallback(async () => {
+    const version = ++requestVersion.current;
     try {
       setIsLoading(true);
       setLoadError(null);
-      const data = await inventoryService.getProducts(showArchived);
-      setProducts(data);
+      const result = await inventoryService.getProductPage(page, showArchived, search, activeCategory);
+      if (version !== requestVersion.current) return;
+      setProducts(result.data);
+      setHasMore(result.meta.hasMore);
     } catch (error) {
+      if (version !== requestVersion.current) return;
+      setProducts([]);
+      setHasMore(false);
       console.error('Error cargando inventario:', error);
       setLoadError(
         'No se pudo cargar el inventario de insumos. Verifique la conexión.',
       );
     } finally {
-      setIsLoading(false);
+      if (version === requestVersion.current) setIsLoading(false);
     }
-  }, [showArchived]);
+  }, [showArchived, search, activeCategory, page]);
 
   useEffect(() => {
     const load = async () => {
@@ -96,15 +111,6 @@ export default function InventoryPage() {
       alert('No se pudo reactivar el insumo.');
     }
   };
-
-  const filteredProducts = products.filter((p) => {
-    const matchesSearch = p.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchesCategory =
-      activeCategory === 'TODOS' || p.category === activeCategory;
-    return matchesSearch && matchesCategory;
-  });
 
   return (
     <div className="space-y-6">
@@ -158,7 +164,7 @@ export default function InventoryPage() {
             <input
               type="checkbox"
               checked={showArchived}
-              onChange={(e) => setShowArchived(e.target.checked)}
+              onChange={(e) => { setShowArchived(e.target.checked); setPage(1); }}
               className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
             />
             Incluir archivados
@@ -196,7 +202,7 @@ export default function InventoryPage() {
               type="button"
               role="tab"
               aria-selected={activeCategory === tab.id}
-              onClick={() => setActiveCategory(tab.id)}
+              onClick={() => { setActiveCategory(tab.id); setPage(1); }}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeCategory === tab.id
                   ? 'border-emerald-600 text-emerald-600'
@@ -234,7 +240,7 @@ export default function InventoryPage() {
                     Cargando inventario...
                   </td>
                 </tr>
-              ) : filteredProducts.length === 0 ? (
+              ) : products.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -247,7 +253,7 @@ export default function InventoryPage() {
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((product) => {
+                products.map((product) => {
                   const isArchived = product.isActive === false;
                   return (
                     <tr
@@ -385,6 +391,7 @@ export default function InventoryPage() {
             </tbody>
           </table>
         </div>
+        <PageNavigation page={page} hasMore={hasMore} busy={isLoading} onChange={setPage} />
       </div>
     </div>
   );

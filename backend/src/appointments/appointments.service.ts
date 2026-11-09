@@ -13,7 +13,11 @@ import {
   fingerprint,
   assertReplay,
 } from '../common/utils/idempotency.util';
-import { parseClinicDateTime } from '../common/utils/timezone.util';
+import {
+  getClinicMonthBounds,
+  getClinicDateParts,
+  parseClinicDateTime,
+} from '../common/utils/timezone.util';
 
 export const APPOINTMENT_DOCTOR_SELECT = {
   id: true,
@@ -157,19 +161,7 @@ export class AppointmentsService {
   }
 
   async findAll(filters?: AppointmentQueryFilters): Promise<Appointment[]> {
-    if (!filters) {
-      return this.prisma.appointment.findMany({
-        orderBy: { date: 'asc' },
-        include: {
-          patient: true,
-          doctor: {
-            select: { id: true, name: true },
-          },
-          specialty: true,
-        },
-      });
-    }
-
+    filters ??= {};
     const where: Prisma.AppointmentWhereInput = {};
     if (filters.doctorId) {
       where.doctorId = filters.doctorId;
@@ -183,16 +175,22 @@ export class AppointmentsService {
       }
       where.status = filters.status;
     }
-    if (filters.from || filters.to) {
-      where.date = {
-        ...(filters.from ? { gte: parseClinicDateTime(filters.from) } : {}),
-        ...(filters.to ? { lte: parseClinicDateTime(filters.to) } : {}),
-      };
-    }
+    const today = getClinicDateParts();
+    const month = getClinicMonthBounds(today.year, today.month);
+    if (Boolean(filters.from) !== Boolean(filters.to))
+      throw new BadRequestException('Indique from y to juntos.');
+    const from = filters.from ? parseClinicDateTime(filters.from) : month.start;
+    const to = filters.to ? parseClinicDateTime(filters.to) : month.end;
+    if (to < from || to.getTime() - from.getTime() > 62 * 86400000)
+      throw new BadRequestException(
+        'El rango debe estar ordenado y no superar 62 días.',
+      );
+    where.date = { gte: from, lte: to };
 
-    return this.prisma.appointment.findMany({
+    const appointments = await this.prisma.appointment.findMany({
       where,
-      orderBy: { date: 'asc' },
+      take: 2001,
+      orderBy: [{ date: 'asc' }, { id: 'asc' }],
       include: {
         patient: true,
         doctor: {
@@ -201,6 +199,11 @@ export class AppointmentsService {
         specialty: true,
       },
     });
+    if (appointments.length > 2000)
+      throw new BadRequestException(
+        'Hay más de 2000 turnos. Acote el período o filtre por médico.',
+      );
+    return appointments;
   }
 
   async updateStatus(

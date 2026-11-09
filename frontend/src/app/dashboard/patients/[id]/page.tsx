@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { patientsService } from '@/services/patients.service';
 import { medicalRecordsService } from '@/services/medicalRecords.service';
@@ -8,6 +8,7 @@ import { Patient } from '@/schemas/patient.schema';
 import Link from 'next/link';
 import { ClinicalAccessPanel } from '@/components/ClinicalAccessPanel';
 import { api } from '@/services/api';
+import { PageNavigation } from '@/components/ui/PageNavigation';
 import {
   ArrowLeft,
   Stethoscope,
@@ -74,6 +75,11 @@ export default function PatientDetailPage() {
 
   const [patient, setPatient] = useState<PatientWithAppointments | null>(null);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [historyPagination, setHistoryPagination] = useState({ patientId, page: 1 });
+  const historyPage = historyPagination.patientId === patientId ? historyPagination.page : 1;
+  const setHistoryPage = (page: number) => setHistoryPagination({ patientId, page });
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const requestVersion = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -90,20 +96,25 @@ export default function PatientDetailPage() {
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
 
   const loadData = useCallback(async () => {
+    const version = ++requestVersion.current;
     setIsLoading(true);
     setLoadError(null);
     setRecords([]);
     setClinicalDenied(false);
     try {
       const patientData = await patientsService.getById(patientId);
+      if (version !== requestVersion.current) return;
       setPatient(patientData);
 
       // No solicitar datos clínicos desde una sesión sin permiso (S03 / T02)
       if (canReadClinicalHistory) {
         try {
-          const recordsData = await medicalRecordsService.getByPatientId(patientId);
-          setRecords(recordsData);
+          const result = await medicalRecordsService.getPage<MedicalRecord>(patientId, historyPage);
+          if (version !== requestVersion.current) return;
+          setRecords(result.data);
+          setHistoryHasMore(result.meta.hasMore);
         } catch (error) {
+          if (version !== requestVersion.current) return;
           if (isAxiosError(error) && error.response?.status === 403) {
             setClinicalDenied(true);
           } else {
@@ -114,6 +125,7 @@ export default function PatientDetailPage() {
         setRecords([]);
       }
     } catch (error) {
+      if (version !== requestVersion.current) return;
       console.error('Error cargando el historial:', error);
       if (isAxiosError(error)) {
         if (error.response?.status === 404) {
@@ -128,9 +140,9 @@ export default function PatientDetailPage() {
         setLoadError('Ocurrió un error inesperado al cargar los datos.');
       }
     } finally {
-      setIsLoading(false);
+      if (version === requestVersion.current) setIsLoading(false);
     }
-  }, [patientId, canReadClinicalHistory]);
+  }, [patientId, canReadClinicalHistory, historyPage]);
 
   useEffect(() => {
     if (!user) return;
@@ -163,7 +175,8 @@ export default function PatientDetailPage() {
       ) as HTMLInputElement;
       if (fileInput) fileInput.value = '';
 
-      await loadData();
+      if (historyPage === 1) await loadData();
+      else setHistoryPage(1);
     } catch (error) {
       console.error('Error al guardar la nota', error);
       const message = isAxiosError(error)
@@ -190,7 +203,8 @@ export default function PatientDetailPage() {
       );
       setAddendumText('');
       setActiveAddendumRecordId(null);
-      await loadData();
+      if (historyPage === 1) await loadData();
+      else setHistoryPage(1);
     } catch (error) {
       console.error('Error al registrar adenda:', error);
       const message = isAxiosError(error)
@@ -443,6 +457,7 @@ export default function PatientDetailPage() {
 
         {/* Columna Derecha: Historial Clínico */}
         <div className="lg:col-span-2">
+          {canReadClinicalHistory && !clinicalDenied && <PageNavigation page={historyPage} hasMore={historyHasMore} busy={isLoading} onChange={setHistoryPage} />}
           {!canReadClinicalHistory || clinicalDenied ? (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-slate-400 min-h-100">
               <Lock size={48} className="text-slate-300 mb-4" />

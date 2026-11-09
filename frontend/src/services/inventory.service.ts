@@ -1,4 +1,5 @@
 import { api } from './api';
+import { PageResult } from './pagination';
 import {
   Product,
   ProductFormValues,
@@ -14,6 +15,10 @@ export interface UpdateProductDto {
 }
 
 export const inventoryService = {
+  getProductPage: async (page: number, includeInactive: boolean, search: string, category: string): Promise<PageResult<Product>> => {
+    const { data } = await api.get<PageResult<Product>>('/inventory/products/page', { params: { page, limit: 25, includeInactive, search, category } });
+    return data;
+  },
   getProducts: async (includeInactive: boolean = false): Promise<Product[]> => {
     const { data } = await api.get<Product[]>('/inventory/products', {
       params: includeInactive ? { includeInactive: 'true' } : undefined,

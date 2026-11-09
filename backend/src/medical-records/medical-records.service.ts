@@ -250,7 +250,29 @@ export class MedicalRecordsService {
     });
   }
 
-  async findByPatient(patientId: string, actorId?: string, actorRole?: string) {
+  async findPageByPatient(
+    patientId: string,
+    actorId: string,
+    actorRole: string,
+    page: number,
+    limit: number,
+  ) {
+    const rows = await this.findByPatient(patientId, actorId, actorRole, {
+      skip: (page - 1) * limit,
+      take: limit + 1,
+    });
+    return {
+      data: rows.slice(0, limit),
+      meta: { page, limit, hasMore: rows.length > limit },
+    };
+  }
+
+  async findByPatient(
+    patientId: string,
+    actorId?: string,
+    actorRole?: string,
+    pagination?: { skip: number; take: number },
+  ) {
     await new ClinicalAccessService(this.prisma).assertAccess(
       patientId,
       actorId,
@@ -267,7 +289,9 @@ export class MedicalRecordsService {
 
     const records = await this.prisma.medicalRecord.findMany({
       where: { patientId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: pagination?.skip ?? 0,
+      take: pagination?.take ?? 51,
       include: {
         doctor: {
           select: { id: true, name: true, email: true },
@@ -275,6 +299,10 @@ export class MedicalRecordsService {
       },
     });
 
+    if (!pagination && records.length > 50)
+      throw new BadRequestException(
+        'Use la historia paginada: /medical-records/patient/:id/page.',
+      );
     await this.auditService?.record({
       actorId,
       actorRole,
@@ -287,7 +315,10 @@ export class MedicalRecordsService {
     });
 
     const files = await this.prisma.medicalAttachment.findMany({
-      where: { patientId },
+      where: {
+        patientId,
+        medicalRecordId: { in: records.map((record) => record.id) },
+      },
     });
     // Preserve old studies without trusting unverified legacy paths. Validate them
     // once under an authorized doctor's request; never recreate revoked metadata.

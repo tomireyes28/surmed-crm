@@ -21,7 +21,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { RequestWithUser } from '../auth/interfaces/auth.interface';
-import { parseBooleanQuery } from '../common/utils/query.util';
+import {
+  parseBooleanQuery,
+  parsePositiveIntQuery,
+} from '../common/utils/query.util';
 
 @ApiTags('Inventario')
 @ApiBearerAuth()
@@ -50,6 +53,23 @@ export class InventoryController {
       search,
       category,
       parsedIncludeInactive,
+    );
+  }
+
+  @Get('products/page')
+  findProductPage(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('category') category?: string,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    return this.inventoryService.findProductPage(
+      parsePositiveIntQuery(page, 'page', 1, { max: 10000 }),
+      parsePositiveIntQuery(limit, 'limit', 25),
+      search,
+      category,
+      parseBooleanQuery(includeInactive, 'includeInactive'),
     );
   }
 

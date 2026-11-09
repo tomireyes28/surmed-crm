@@ -19,6 +19,7 @@ import {
   AppointmentStatusType,
 } from '@/utils/domain-rules';
 import { isAxiosError } from 'axios';
+import { toClinicCalendarDate } from '@/utils/calendar';
 
 const locales = { es };
 
@@ -81,8 +82,8 @@ export function CalendarWrapper({
   const events: CalendarEvent[] = appointments.map((app) => ({
     id: app.id,
     title: `${app.patient?.lastName}, ${app.patient?.firstName} - ${app.specialty?.name}`,
-    start: new Date(app.date),
-    end: new Date(new Date(app.date).getTime() + app.duration * 60000),
+    start: toClinicCalendarDate(app.date),
+    end: toClinicCalendarDate(new Date(new Date(app.date).getTime() + app.duration * 60000)),
     resource: app,
   }));
 
@@ -148,6 +149,8 @@ export function CalendarWrapper({
     <div className="h-full relative">
       <Calendar
         localizer={localizer}
+        getNow={() => toClinicCalendarDate(new Date())}
+        views={['month', 'week', 'day', 'agenda']}
         events={events}
         startAccessor="start"
         endAccessor="end"

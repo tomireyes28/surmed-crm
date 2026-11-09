@@ -1,6 +1,11 @@
 import { api } from './api';
+import { PageResult } from './pagination';
 
 export const medicalRecordsService = {
+  getPage: async <T>(patientId: string, page: number): Promise<PageResult<T>> => {
+    const { data } = await api.get<PageResult<T>>(`/medical-records/patient/${patientId}/page`, { params: { page, limit: 25 } });
+    return data;
+  },
   getByPatientId: async (patientId: string) => {
     const { data } = await api.get(`/medical-records/patient/${patientId}`);
     return data;

@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 
 /**
  * Zona horaria oficial del centro médico Surmed (Paraguay).
- * Según Ley N° 7154/2023 de Paraguay, el huso horario oficial permanente es UTC-3.
+ * Los horarios operativos actuales se interpretan con offset -03:00.
  */
 export const CLINIC_TIMEZONE = 'America/Asuncion';
 export const CLINIC_UTC_OFFSET = '-03:00';
@@ -21,10 +21,36 @@ const CIVIL_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})/;
  *   de modo que la hora agendada no dependa del huso horario del servidor ni del navegador.
  */
 export function parseClinicDateTime(raw: string): Date {
+  if (typeof raw !== 'string')
+    throw new BadRequestException('La fecha debe ser texto ISO 8601.');
   const trimmed = raw?.trim();
   if (!trimmed) {
     throw new BadRequestException('La fecha y hora son obligatorias.');
   }
+
+  const parts =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(?:Z|([+-])(\d{2}):(\d{2}))?$/i.exec(
+      trimmed,
+    );
+  if (!parts)
+    throw new BadRequestException('Formato de fecha y hora inválido.');
+  const [, y, m, d, h, min, sec, , offsetHour, offsetMinute] = parts;
+  const calendar = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+  if (
+    Number(y) < 1900 ||
+    calendar.getUTCFullYear() !== Number(y) ||
+    calendar.getUTCMonth() + 1 !== Number(m) ||
+    calendar.getUTCDate() !== Number(d) ||
+    Number(h) > 23 ||
+    Number(min) > 59 ||
+    Number(sec ?? 0) > 59 ||
+    Number(offsetHour ?? 0) > 14 ||
+    Number(offsetMinute ?? 0) > 59 ||
+    (Number(offsetHour) === 14 && Number(offsetMinute) !== 0)
+  )
+    throw new BadRequestException(
+      'La fecha calendario, hora u offset no es válido.',
+    );
 
   let normalized = trimmed;
   if (!ISO_WITH_OFFSET_REGEX.test(trimmed)) {
@@ -33,14 +59,15 @@ export function parseClinicDateTime(raw: string): Date {
         'Formato de fecha y hora inválido. Use ISO 8601 (ej. 2026-11-05T09:30:00-03:00).',
       );
     }
-    const withSeconds =
-      trimmed.length === 16 ? `${trimmed}:00` : trimmed;
+    const withSeconds = trimmed.length === 16 ? `${trimmed}:00` : trimmed;
     normalized = `${withSeconds}${CLINIC_UTC_OFFSET}`;
   }
 
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) {
-    throw new BadRequestException('La fecha y hora proporcionadas no son válidas.');
+    throw new BadRequestException(
+      'La fecha y hora proporcionadas no son válidas.',
+    );
   }
 
   return parsed;
@@ -52,10 +79,14 @@ export function parseClinicDateTime(raw: string): Date {
  * de nacimiento hacia el día anterior o siguiente.
  */
 export function parseCivilDate(raw: string, allowFuture = false): Date {
+  if (typeof raw !== 'string')
+    throw new BadRequestException('La fecha debe ser texto ISO 8601.');
   const trimmed = raw?.trim();
   if (!trimmed) {
     throw new BadRequestException('La fecha es obligatoria.');
   }
+
+  if (trimmed.length !== 10) parseClinicDateTime(trimmed);
 
   const match = CIVIL_DATE_REGEX.exec(trimmed);
   if (!match) {
@@ -78,7 +109,9 @@ export function parseCivilDate(raw: string, allowFuture = false): Date {
     utcNoon.getUTCMonth() !== month - 1 ||
     utcNoon.getUTCDate() !== day
   ) {
-    throw new BadRequestException('La fecha calendario no existe (ej. 30 de febrero).');
+    throw new BadRequestException(
+      'La fecha calendario no existe (ej. 30 de febrero).',
+    );
   }
 
   if (!allowFuture) {
